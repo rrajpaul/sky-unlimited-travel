@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
@@ -12,7 +13,7 @@ async function initDb() {
       name VARCHAR(255) NOT NULL,
       email VARCHAR(255) NOT NULL,
       phone VARCHAR(50),
-      message TEXT,
+      details TEXT,
       country VARCHAR(255),
       city VARCHAR(255),
       payment_link_sent BOOLEAN DEFAULT false,
