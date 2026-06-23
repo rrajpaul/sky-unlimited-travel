@@ -25,6 +25,9 @@ const DestinationCard = ({ data, className }) => {
     }
   }
 
+  const country = data.country ?? data.subtitle ?? '';
+  const city = data.city ?? data.title ?? '';
+
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -106,7 +109,7 @@ const DestinationCard = ({ data, className }) => {
                 <p className="text-xs text-gray-400">Ready to explore?</p>
                 <p className="text-sm font-bold text-[#1a2947]">Plan your custom trip today</p>
               </div>
-              <BookingProcessModal>
+              <BookingProcessModal country={country} city={city}>
                 <button
                   className="flex-1 sm:flex-none text-center bg-[#1a2947] text-white px-8 py-3 rounded-lg font-semibold hover:bg-[#2c426e] transition-colors duration-300 shadow-lg hover:shadow-xl"
                 >
