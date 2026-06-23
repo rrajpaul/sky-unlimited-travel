@@ -39,7 +39,11 @@ const AdminPage = () => {
       setError('Please fill in all fields');
       return;
     }
-    if (loginForm.username === 'admin' && loginForm.password === 'password') {
+    if (
+        loginForm.username === import.meta.env.VITE_ADMIN_USERNAME &&
+        loginForm.password === import.meta.env.VITE_ADMIN_PASSWORD
+      ) 
+    {
       setIsLoggedIn(true);
       localStorage.setItem('adminAuth', 'true');
       loadRegistrations();

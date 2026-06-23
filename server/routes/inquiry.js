@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STRIPE_URL = 'https://buy.stripe.com/9B63cx7II4vfev51iF3Ru01';
 
@@ -21,15 +20,12 @@ router.get('/', async (req, res) => {
 // POST new inquiry
 router.post('/', async (req, res) => {
   const { name, email, phone, country, city, details } = req.body;
-
   if (!name?.trim() || !email?.trim()) {
     return res.status(400).json({ error: 'Name and email are required.' });
   }
-
   if (!emailRe.test(email)) {
     return res.status(400).json({ error: 'Invalid email address.' });
   }
-
   try {
     await pool.query(
       `INSERT INTO inquiries (type, name, email, phone, country, city, details)
@@ -53,23 +49,19 @@ router.post('/', async (req, res) => {
 // POST send payment link
 router.post('/:id/send-payment-link', async (req, res) => {
   const { id } = req.params;
-
   try {
     const result = await pool.query(
       'SELECT * FROM inquiries WHERE id = $1',
       [id]
     );
-
     const inquiry = result.rows[0];
     if (!inquiry) return res.status(404).json({ error: 'Inquiry not found' });
-
     await pool.query(
       `UPDATE inquiries
        SET payment_link_sent = true, payment_link_sent_at = NOW()
        WHERE id = $1`,
       [id]
     );
-
     res.json({ ok: true, stripeUrl: STRIPE_URL });
   } catch (err) {
     console.error('Send payment link error:', err);
@@ -77,10 +69,33 @@ router.post('/:id/send-payment-link', async (req, res) => {
   }
 });
 
+// PATCH payment status (toggle paid/unpaid)
+router.patch('/:id/payment-status', async (req, res) => {
+  const { id } = req.params;
+  const { payment_status } = req.body;
+
+  if (!['paid', 'unpaid'].includes(payment_status)) {
+    return res.status(400).json({ error: 'Invalid payment status' });
+  }
+
+  try {
+    await pool.query(
+      `UPDATE inquiries
+      SET payment_status = $1::varchar,
+          payment_paid_at = CASE WHEN $1::varchar = 'paid' THEN NOW() ELSE NULL END
+      WHERE id = $2`,
+      [payment_status, id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Payment status update error:', err);
+    res.status(500).json({ error: 'Failed to update payment status' });
+  }
+});
+
 // POST Stripe webhook
 router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
-
   let event;
   try {
     const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -89,11 +104,9 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     console.error('Webhook signature error:', err.message);
     return res.status(400).json({ error: `Webhook error: ${err.message}` });
   }
-
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const email = session.customer_details?.email;
-
     try {
       await pool.query(
         `UPDATE inquiries
@@ -106,7 +119,6 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       console.error('Webhook DB update error:', err);
     }
   }
-
   res.json({ received: true });
 });
 
