@@ -20,7 +20,9 @@ async function initDb() {
       payment_link_sent_at TIMESTAMPTZ,
       payment_status VARCHAR(20) DEFAULT 'unpaid',
       payment_paid_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ DEFAULT NOW()
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      from_date DATE,
+      to_date DATE
     )
   `);
   console.log('Database ready');

@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
 
 // POST new inquiry
 router.post('/', async (req, res) => {
-  const { name, email, phone, country, city, details } = req.body;
+  const { name, email, phone, country, city, details, fromDate, toDate } = req.body;
   if (!name?.trim() || !email?.trim()) {
     return res.status(400).json({ error: 'Name and email are required.' });
   }
@@ -28,8 +28,8 @@ router.post('/', async (req, res) => {
   }
   try {
     await pool.query(
-      `INSERT INTO inquiries (type, name, email, phone, country, city, details)
-       VALUES ('booking', $1, $2, $3, $4, $5, $6)`,
+      `INSERT INTO inquiries (type, name, email, phone, country, city, details, from_date, to_date)
+      VALUES ('booking', $1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         name.trim(),
         email.trim(),
@@ -37,6 +37,8 @@ router.post('/', async (req, res) => {
         country?.trim() || null,
         city?.trim() || null,
         details?.trim() || null,
+        fromDate || null,
+        toDate || null
       ]
     );
     res.json({ ok: true });
