@@ -118,7 +118,7 @@ const BookingProcessModal = ({ children, country: initialCountry = '', city: ini
       }
     }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="max-w-md md:max-w-lg bg-white p-0 overflow-hidden border-none shadow-2xl rounded-2xl max-h-[98vh] overflow-y-auto">
+      <DialogContent className="max-w-md md:max-w-lg bg-white p-0 overflow-hidden border-none shadow-2xl rounded-2xl max-h-[98vh] overflow-y-auto [&>button]:text-white [&>button]:bg-[#1a2947] [&>button]:hover:bg-[#2c426e] [&>button]:rounded-full [&>button]:opacity-100">
         <div className="bg-[#1a2947] p-4 text-white text-center">
           <DialogTitle className="text-xl font-bold mb-1">Booking Process</DialogTitle>
           <DialogDescription className="text-blue-100">
