@@ -47,7 +47,8 @@ const countryCities = {
   'Caribbean': ['Jamaica', 'Antigua', 'Trinidad'],
   'Mexico': ['Cancun'],
   'Netherlands': ['Amsterdam'],
-  'Canada': ['Vancouver', 'Toronto', 'Montreal', 'Banff']
+  'Canada': ['Vancouver', 'Toronto', 'Montreal', 'Banff'],
+  'Other': ['Other']
 };
 
 const STRIPE_URL = 'https://buy.stripe.com/9B63cx7II4vfev51iF3Ru01';
