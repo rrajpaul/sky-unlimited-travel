@@ -40,10 +40,9 @@ const AdminPage = () => {
       return;
     }
     if (
-        loginForm.username === import.meta.env.VITE_ADMIN_USERNAME &&
-        loginForm.password === import.meta.env.VITE_ADMIN_PASSWORD
-      ) 
-    {
+      loginForm.username === import.meta.env.VITE_ADMIN_USERNAME &&
+      loginForm.password === import.meta.env.VITE_ADMIN_PASSWORD
+    ) {
       setIsLoggedIn(true);
       localStorage.setItem('adminAuth', 'true');
       loadRegistrations();
@@ -92,6 +91,8 @@ const AdminPage = () => {
       alert('Failed to update payment status');
     }
   };
+
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString() : '—';
 
   if (!isLoggedIn) {
     return (
@@ -171,7 +172,6 @@ const AdminPage = () => {
           <div className="block sm:hidden divide-y divide-gray-200">
             {registrations.map((reg) => (
               <div key={reg.id} className="p-4">
-                {/* Mobile main row */}
                 <button
                   onClick={() => toggleRow(reg.id)}
                   className="w-full text-left flex items-center justify-between gap-3"
@@ -188,9 +188,7 @@ const AdminPage = () => {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      reg.payment_status === 'paid'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
+                      reg.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                     }`}>
                       {reg.payment_status === 'paid' ? 'Paid' : 'Unpaid'}
                     </span>
@@ -201,70 +199,71 @@ const AdminPage = () => {
                   </div>
                 </button>
 
-                {/* Mobile accordion */}
                 {expandedRows[reg.id] && (
                   <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
-                    {/* Detail grid */}
+
+                    {/* Mobile Row 1 — From, To, Additional Details (spans 2) */}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Phone</p>
-                        <p className="text-sm text-gray-800 mt-0.5">{reg.phone || 'N/A'}</p>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">From Date</p>
+                        <p className="text-sm text-gray-800 mt-0.5">{reg.from_date ? formatDate(reg.from_date) : '—'}</p>
                       </div>
                       <div>
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Submitted</p>
-                        <p className="text-sm text-gray-800 mt-0.5">{new Date(reg.created_at).toLocaleDateString()}</p>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">To Date</p>
+                        <p className="text-sm text-gray-800 mt-0.5">{reg.to_date ? formatDate(reg.to_date) : '—'}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Additional Details</p>
+                        <p className="text-sm text-gray-700 mt-0.5">{reg.details || 'No additional details provided.'}</p>
+                      </div>
+                    </div>
+
+                    {/* Mobile Row 2 — Action, Link Sent, Toggle, Payment */}
+                    <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Action</p>
+                        <button
+                          onClick={() => handleSendPaymentLink(reg)}
+                          disabled={reg.payment_status === 'paid'}
+                          className="w-full text-center px-3 py-2 text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
+                        >
+                          {reg.payment_link_sent ? 'Resend Link' : 'Send Link'}
+                        </button>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Link Sent</p>
+                        <p className="text-sm text-gray-800 mt-0.5">{reg.payment_link_sent ? formatDate(reg.payment_link_sent_at) : '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Paid / Unpaid</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleTogglePayment(reg)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+                              reg.payment_status === 'paid' ? 'bg-green-500' : 'bg-gray-300'
+                            }`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                              reg.payment_status === 'paid' ? 'translate-x-6' : 'translate-x-1'
+                            }`} />
+                          </button>
+                          <span className={`text-xs font-semibold ${reg.payment_status === 'paid' ? 'text-green-600' : 'text-yellow-600'}`}>
+                            {reg.payment_status === 'paid' ? 'Paid' : 'Unpaid'}
+                          </span>
+                        </div>
                       </div>
                       <div>
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Payment</p>
                         <span className={`inline-block mt-0.5 px-2 py-0.5 text-xs font-medium rounded-full ${
-                          reg.payment_status === 'paid'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-yellow-100 text-yellow-800'
+                          reg.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                         }`}>
                           {reg.payment_status === 'paid'
-                            ? `Paid${reg.payment_paid_at ? ` · ${new Date(reg.payment_paid_at).toLocaleDateString()}` : ''}`
+                            ? `Paid${reg.payment_paid_at ? ` · ${formatDate(reg.payment_paid_at)}` : ''}`
                             : 'Unpaid'}
                         </span>
                       </div>
-                      <div>
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Link Sent</p>
-                        <p className="text-sm text-gray-800 mt-0.5">
-                          {reg.payment_link_sent
-                            ? new Date(reg.payment_link_sent_at).toLocaleDateString()
-                            : '—'}
-                        </p>
-                      </div>
                     </div>
 
-                    {/* Additional details */}
-                    <div>
-                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Additional Details</p>
-                      <p className="text-sm text-gray-700 mt-0.5">{reg.details || 'No additional details provided.'}</p>
-                    </div>
-
-                    {/* Actions + toggle */}
-                    <div className="flex items-center justify-between pt-2 gap-3">
-                      <button
-                        onClick={() => handleSendPaymentLink(reg)}
-                        disabled={reg.payment_status === 'paid'}
-                        className="flex-1 text-center px-3 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
-                      >
-                        {reg.payment_link_sent ? 'Resend Link' : 'Send Payment Link'}
-                      </button>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-xs font-medium text-gray-500">Paid</span>
-                        <button
-                          onClick={() => handleTogglePayment(reg)}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-                            reg.payment_status === 'paid' ? 'bg-green-500' : 'bg-gray-300'
-                          }`}
-                        >
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                            reg.payment_status === 'paid' ? 'translate-x-6' : 'translate-x-1'
-                          }`} />
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 )}
               </div>
@@ -286,7 +285,6 @@ const AdminPage = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {registrations.map((reg) => (
                   <React.Fragment key={reg.id}>
-                    {/* Main row */}
                     <tr
                       className="hover:bg-gray-50 cursor-pointer"
                       onClick={() => toggleRow(reg.id)}
@@ -315,68 +313,76 @@ const AdminPage = () => {
                         {reg.phone || 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(reg.created_at).toLocaleDateString()}
+                        {formatDate(reg.created_at)}
                       </td>
                     </tr>
 
-                    {/* Accordion row */}
                     {expandedRows[reg.id] && (
                       <tr className="bg-indigo-50">
-                        <td colSpan={5} className="px-6 py-5">
-                          <div className="grid grid-cols-3 gap-6 mb-4">
+                        <td colSpan={5} className="px-6 py-5 space-y-4">
+
+                          {/* Desktop Row 1 — From Date, To Date, Additional Details (spans 2) */}
+                          <div className="grid grid-cols-4 gap-6">
                             <div>
-                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Payment</p>
-                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                reg.payment_status === 'paid'
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {reg.payment_status === 'paid'
-                                  ? `Paid${reg.payment_paid_at ? ` · ${new Date(reg.payment_paid_at).toLocaleDateString()}` : ''}`
-                                  : 'Unpaid'}
-                              </span>
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">From Date</p>
+                              <p className="text-sm text-gray-800">{reg.from_date ? formatDate(reg.from_date) : '—'}</p>
                             </div>
                             <div>
-                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Link Sent</p>
-                              <p className="text-sm text-gray-800">
-                                {reg.payment_link_sent
-                                  ? new Date(reg.payment_link_sent_at).toLocaleDateString()
-                                  : '—'}
-                              </p>
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">To Date</p>
+                              <p className="text-sm text-gray-800">{reg.to_date ? formatDate(reg.to_date) : '—'}</p>
                             </div>
+                            <div className="col-span-2">
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Additional Details</p>
+                              <p className="text-sm text-gray-700">{reg.details || '—'}</p>
+                            </div>
+                          </div>
+
+                          {/* Desktop Row 2 — Action, Link Sent, Paid/Unpaid, Payment */}
+                          <div className="grid grid-cols-4 gap-6 pt-3 border-t border-indigo-100">
                             <div>
                               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Action</p>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleSendPaymentLink(reg); }}
                                 disabled={reg.payment_status === 'paid'}
-                                className="inline-flex items-center px-3 py-1 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
+                                className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
                               >
-                                {reg.payment_link_sent ? 'Resend Link' : 'Send Payment Link'}
+                                {reg.payment_link_sent ? 'Resend Link' : 'Send Link'}
                               </button>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Link Sent</p>
+                              <p className="text-sm text-gray-800">{reg.payment_link_sent ? formatDate(reg.payment_link_sent_at) : '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Paid / Unpaid</p>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleTogglePayment(reg); }}
+                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+                                    reg.payment_status === 'paid' ? 'bg-green-500' : 'bg-gray-300'
+                                  }`}
+                                >
+                                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                                    reg.payment_status === 'paid' ? 'translate-x-6' : 'translate-x-1'
+                                  }`} />
+                                </button>
+                                <span className={`text-sm font-semibold ${reg.payment_status === 'paid' ? 'text-green-600' : 'text-yellow-600'}`}>
+                                  {reg.payment_status === 'paid' ? 'Paid' : 'Unpaid'}
+                                </span>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Payment</p>
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                reg.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {reg.payment_status === 'paid'
+                                  ? `Paid${reg.payment_paid_at ? ` · ${formatDate(reg.payment_paid_at)}` : ''}`
+                                  : 'Unpaid'}
+                              </span>
                             </div>
                           </div>
 
-                          <div className="mb-4">
-                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Additional Details</p>
-                            <p className="text-sm text-gray-700">{reg.details || 'No additional details provided.'}</p>
-                          </div>
-
-                          <div className="flex items-center gap-3 pt-3 border-t border-indigo-100">
-                            <span className="text-sm font-medium text-gray-600">Mark as Paid</span>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleTogglePayment(reg); }}
-                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-                                reg.payment_status === 'paid' ? 'bg-green-500' : 'bg-gray-300'
-                              }`}
-                            >
-                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                                reg.payment_status === 'paid' ? 'translate-x-6' : 'translate-x-1'
-                              }`} />
-                            </button>
-                            <span className={`text-sm font-semibold ${reg.payment_status === 'paid' ? 'text-green-600' : 'text-yellow-600'}`}>
-                              {reg.payment_status === 'paid' ? 'Paid' : 'Unpaid'}
-                            </span>
-                          </div>
                         </td>
                       </tr>
                     )}
