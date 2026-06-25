@@ -187,11 +187,11 @@ const AdminPage = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      reg.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {reg.payment_status === 'paid' ? 'Paid' : 'Unpaid'}
-                    </span>
+                    {/* Submitted replaces Paid/Unpaid badge in mobile parent row */}
+                    <div className="text-right">
+                      <p className="text-xs text-gray-400">Submitted</p>
+                      <p className="text-xs font-medium text-gray-700">{formatDate(reg.created_at)}</p>
+                    </div>
                     {expandedRows[reg.id]
                       ? <ChevronDown className="w-4 h-4 text-gray-400" />
                       : <ChevronRight className="w-4 h-4 text-gray-400" />
@@ -202,7 +202,7 @@ const AdminPage = () => {
                 {expandedRows[reg.id] && (
                   <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
 
-                    {/* Mobile Row 1 — From, To, Additional Details (spans 2) */}
+                    {/* Mobile Row 1 — From Date, To Date, Additional Details spans 2 */}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">From Date</p>
@@ -321,7 +321,7 @@ const AdminPage = () => {
                       <tr className="bg-indigo-50">
                         <td colSpan={5} className="px-6 py-5 space-y-4">
 
-                          {/* Desktop Row 1 — From Date, To Date, Additional Details (spans 2) */}
+                          {/* Desktop Row 1 — From Date, To Date, Additional Details spans 2 */}
                           <div className="grid grid-cols-4 gap-6">
                             <div>
                               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">From Date</p>
