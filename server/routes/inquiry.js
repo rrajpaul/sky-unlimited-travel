@@ -3,6 +3,8 @@ const router = express.Router();
 const { pool } = require('../db');
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STRIPE_URL = 'https://buy.stripe.com/9B63cx7II4vfev51iF3Ru01';
+const transporter = require('../utils/mailer');
+
 
 // GET all inquiries
 router.get('/', async (req, res) => {
@@ -57,14 +59,70 @@ router.post('/:id/send-payment-link', async (req, res) => {
       [id]
     );
     const inquiry = result.rows[0];
-    if (!inquiry) return res.status(404).json({ error: 'Inquiry not found' });
+    if (!inquiry) {
+      return res.status(404).json({ error: 'Inquiry not found' });
+    }
+
+    const destination = [inquiry.country, inquiry.city].filter(Boolean).join(', ');
+    const fromDate = inquiry.from_date ? new Date(inquiry.from_date).toLocaleDateString() : null;
+    const toDate = inquiry.to_date ? new Date(inquiry.to_date).toLocaleDateString() : null;
+    const dateRange = fromDate && toDate ? `${fromDate} – ${toDate}` : null;
+
+    await transporter.sendMail({
+      from: `"Sky Unlimited Travel" <${process.env.EMAIL_USER}>`,
+      to: inquiry.email,
+      subject: 'Complete Your Travel Booking – Sky Unlimited Travel',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #1a2947; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">Sky Unlimited Travel</h1>
+          </div>
+
+          <div style="background-color: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+            <h2 style="color: #1a2947; margin-top: 0;">Hello ${inquiry.name},</h2>
+            <p style="color: #6b7280;">Thank you for your travel booking request. Your trip details are below:</p>
+
+            <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin: 24px 0;">
+              ${destination ? `
+              <p style="margin: 4px 0; color: #374151;">
+                <strong>Destination:</strong> ${destination}
+              </p>` : ''}
+              ${dateRange ? `
+              <p style="margin: 4px 0; color: #374151;">
+                <strong>Travel Dates:</strong> ${dateRange}
+              </p>` : ''}
+            </div>
+
+            <p style="color: #6b7280;">To secure your booking, please complete your payment by clicking the button below:</p>
+
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${STRIPE_URL}"
+                style="background-color: #1a2947; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block;">
+                Complete Payment
+              </a>
+            </div>
+
+            <p style="color: #9ca3af; font-size: 13px;">If you have any questions, please reply to this email and we'll be happy to help.</p>
+            <p style="color: #9ca3af; font-size: 13px;">If you did not request this, please ignore this email.</p>
+
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+              © ${new Date().getFullYear()} Sky Unlimited Travel. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    });
+
     await pool.query(
       `UPDATE inquiries
-       SET payment_link_sent = true, payment_link_sent_at = NOW()
+       SET payment_link_sent = true,
+           payment_link_sent_at = NOW()
        WHERE id = $1`,
       [id]
     );
-    res.json({ ok: true, stripeUrl: STRIPE_URL });
+
+    res.json({ ok: true });
   } catch (err) {
     console.error('Send payment link error:', err);
     res.status(500).json({ error: 'Failed to send payment link' });

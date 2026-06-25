@@ -12,24 +12,57 @@ const AdminPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    const savedAuth = localStorage.getItem('adminAuth');
-    if (savedAuth) {
-      setIsLoggedIn(true);
-      loadRegistrations();
-    } else {
-      setLoading(false);
-    }
+    const checkAuth = async () => {
+      const token = localStorage.getItem('adminToken');
+
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/admin/verify', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.valid) {
+          setIsLoggedIn(true);
+          loadRegistrations();
+        } else {
+          localStorage.removeItem('adminToken');
+          setIsLoggedIn(false);
+        }
+      } catch (err) {
+        console.error('Auth verification failed:', err);
+        localStorage.removeItem('adminToken');
+        setIsLoggedIn(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
   }, []);
 
   const loadRegistrations = async () => {
     try {
-      const res = await fetch(apiUrl('/api/inquiry'));
+      const token = localStorage.getItem('adminToken');
+
+      const res = await fetch(apiUrl('/api/inquiry'), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
       const data = await res.json();
+
       setRegistrations(data);
-      setLoading(false);
     } catch (err) {
       console.error('Error fetching registrations:', err);
-      setLoading(false);
     }
   };
 
@@ -56,25 +89,56 @@ const AdminPage = () => {
 
       const data = await res.json();
 
-      if (res.ok && data.success) {
-        setIsLoggedIn(true);
+      if (res.ok && data.success && data.token) {
 
-        // ✅ store REAL token instead of "true"
+        // store token
         localStorage.setItem('adminToken', data.token);
 
-        loadRegistrations();
+        // verify token with backend
+        const verifyRes = await fetch('/api/admin/verify', {
+          headers: {
+            Authorization: `Bearer ${data.token}`,
+          },
+        });
+
+        const verifyData = await verifyRes.json();
+
+        if (verifyRes.ok && verifyData.valid) {
+          setIsLoggedIn(true);
+          loadRegistrations();
+        } else {
+          localStorage.removeItem('adminToken');
+          setError('Session invalid');
+        }
+
       } else {
         setError(data.message || 'Invalid credentials');
       }
+
     } catch (err) {
+      console.error('Login error:', err);
       setError('Server error. Please try again.');
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const token = localStorage.getItem('adminToken');
+
+    try {
+      await fetch('/api/admin/logout', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+
     localStorage.removeItem('adminToken');
     setIsLoggedIn(false);
     setLoginForm({ username: '', password: '' });
+
     window.location.href = '/admin';
   };
 

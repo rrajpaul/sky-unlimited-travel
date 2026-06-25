@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 
-const activeTokens = new Map();
+const activeTokens = require('../auth/tokenStore');
 
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
@@ -31,6 +31,41 @@ router.post('/login', async (req, res) => {
   });
 
   return res.json({ success: true, token });
+});
+
+router.get('/verify', (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ valid: false });
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+
+  const session = activeTokens.get(token);
+
+  if (!session) {
+    return res.status(401).json({ valid: false });
+  }
+
+  return res.json({
+    valid: true,
+    username: session.username
+  });
+});
+
+router.post('/logout', (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.json({ success: true });
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+
+  activeTokens.delete(token);
+
+  res.json({ success: true });
 });
 
 module.exports = router;
