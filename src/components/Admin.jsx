@@ -33,27 +33,46 @@ const AdminPage = () => {
     }
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+
     if (!loginForm.username || !loginForm.password) {
       setError('Please fill in all fields');
       return;
     }
-    if (
-      loginForm.username === import.meta.env.VITE_ADMIN_USERNAME &&
-      loginForm.password === import.meta.env.VITE_ADMIN_PASSWORD
-    ) {
-      setIsLoggedIn(true);
-      localStorage.setItem('adminAuth', 'true');
-      loadRegistrations();
-    } else {
-      setError('Invalid credentials');
+
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: loginForm.username,
+          password: loginForm.password,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setIsLoggedIn(true);
+
+        // ✅ store REAL token instead of "true"
+        localStorage.setItem('adminToken', data.token);
+
+        loadRegistrations();
+      } else {
+        setError(data.message || 'Invalid credentials');
+      }
+    } catch (err) {
+      setError('Server error. Please try again.');
     }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('adminAuth');
+    localStorage.removeItem('adminToken');
     setIsLoggedIn(false);
     setLoginForm({ username: '', password: '' });
     window.location.href = '/admin';
