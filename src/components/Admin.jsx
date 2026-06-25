@@ -9,6 +9,7 @@ const AdminPage = () => {
   const [registrations, setRegistrations] = useState([]);
   const [error, setError] = useState('');
   const [expandedRows, setExpandedRows] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const savedAuth = localStorage.getItem('adminAuth');
@@ -96,6 +97,18 @@ const AdminPage = () => {
 
   const formatDate = (date) => date ? new Date(date).toLocaleDateString() : '—';
 
+  const filteredRegistrations = registrations.filter((reg) => {
+    const search = searchTerm.toLowerCase();
+
+    return (
+      reg.name?.toLowerCase().includes(search) ||
+      reg.email?.toLowerCase().includes(search) ||
+      reg.country?.toLowerCase().includes(search) ||
+      reg.city?.toLowerCase().includes(search) ||
+      formatDate(reg.created_at).toLowerCase().includes(search)
+    );
+  });
+
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -177,13 +190,22 @@ const AdminPage = () => {
 
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
+          <input
+            type="text"
+            placeholder="Search customer, destination, or submitted date..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full sm:w-96 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+          />
+        </div>
+          <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-xl font-semibold text-gray-900">Manage Travel Bookings</h2>
             <p className="mt-1 text-sm text-gray-500">Tap a row to expand details, send payment links, and manage status</p>
           </div>
 
           {/* Mobile card layout */}
           <div className="block sm:hidden divide-y divide-gray-200">
-            {registrations.map((reg) => (
+            {filteredRegistrations.map((reg) => (
               <div key={reg.id} className="p-4">
                 <button
                   onClick={() => toggleRow(reg.id)}
@@ -296,7 +318,7 @@ const AdminPage = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {registrations.map((reg) => (
+                {filteredRegistrations.map((reg) => (
                   <React.Fragment key={reg.id}>
                     <tr
                       className="hover:bg-gray-50 cursor-pointer"
