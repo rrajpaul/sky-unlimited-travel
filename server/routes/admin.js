@@ -1,66 +1,35 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const crypto = require('crypto');
-
-const activeTokens = require('../auth/tokenStore');
+const jwt = require('jsonwebtoken');
 
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
-
   const usernameMatch = username === process.env.ADMIN_USERNAME;
-
-  const passwordMatch = await bcrypt.compare(
-    password,
-    process.env.ADMIN_PASSWORD_HASH
-  );
+  const passwordMatch = await bcrypt.compare(password, process.env.ADMIN_PASSWORD_HASH);
 
   if (!usernameMatch || !passwordMatch) {
     return res.status(401).json({ message: 'Invalid credentials' });
   }
 
-  const token = crypto.randomBytes(32).toString('hex');
-
-  activeTokens.set(token, {
-    createdAt: Date.now(),
-    username
-  });
-
+  const token = jwt.sign({ username }, process.env.JWT_SECRET, { expiresIn: '7d' });
   return res.json({ success: true, token });
 });
 
 router.get('/verify', (req, res) => {
   const authHeader = req.headers.authorization;
-
-  if (!authHeader) {
-    return res.status(401).json({ valid: false });
-  }
+  if (!authHeader) return res.status(401).json({ valid: false });
 
   const token = authHeader.replace('Bearer ', '');
-
-  const session = activeTokens.get(token);
-
-  if (!session) {
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    return res.json({ valid: true, username: decoded.username });
+  } catch {
     return res.status(401).json({ valid: false });
   }
-
-  return res.json({
-    valid: true,
-    username: session.username
-  });
 });
 
-router.post('/logout', (req, res) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader) {
-    return res.json({ success: true });
-  }
-
-  const token = authHeader.replace('Bearer ', '');
-
-  activeTokens.delete(token);
-
+router.post('/logout', (_req, res) => {
   res.json({ success: true });
 });
 
