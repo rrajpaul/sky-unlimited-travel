@@ -9,7 +9,8 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASSWORD,
   },
   tls: {
-    ciphers: 'SSLv3',
+    ciphers: 'TLSv1.2',        // ← fix: SSLv3 is deprecated
+    rejectUnauthorized: false   // ← fix: allows Railway's network
   },
 });
 

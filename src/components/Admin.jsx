@@ -21,7 +21,7 @@ const AdminPage = () => {
       }
 
       try {
-        const res = await fetch('/api/admin/verify', {
+        const res = await fetch(apiUrl('/api/admin/verify'), {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -76,7 +76,7 @@ const AdminPage = () => {
     }
 
     try {
-      const res = await fetch('/api/admin/login', {
+      const res = await fetch(apiUrl('/api/admin/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -95,7 +95,7 @@ const AdminPage = () => {
         localStorage.setItem('adminToken', data.token);
 
         // verify token with backend
-        const verifyRes = await fetch('/api/admin/verify', {
+        const verifyRes = await fetch(apiUrl('/api/admin/verify'), {
           headers: {
             Authorization: `Bearer ${data.token}`,
           },
@@ -125,7 +125,7 @@ const AdminPage = () => {
     const token = localStorage.getItem('adminToken');
 
     try {
-      await fetch('/api/admin/logout', {
+      await fetch(apiUrl('/api/admin/logout'), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

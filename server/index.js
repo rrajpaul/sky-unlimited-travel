@@ -5,6 +5,7 @@ const { initDb } = require('./db');
 const contactRoutes = require('./routes/contact');
 const inquiryRoutes = require('./routes/inquiry');
 const adminRoutes = require('./routes/admin');
+const transporter = require('./utils/mailer');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -29,6 +30,16 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/contact', contactRoutes);
 app.use('/api/inquiry', inquiryRoutes);
 app.use('/api/admin', adminRoutes);
+
+// ← add this block
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('Mailer error:', error);
+  } else {
+    console.log('Mailer ready');
+  }
+});
+
 initDb()
   .then(() => app.listen(PORT, () => console.log(`Server on port ${PORT}`)))
   .catch(err => { console.error('DB init failed:', err); process.exit(1); });
