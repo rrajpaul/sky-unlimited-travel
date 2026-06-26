@@ -3,7 +3,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STRIPE_URL = 'https://buy.stripe.com/9B63cx7II4vfev51iF3Ru01';
-const transporter = require('../utils/mailer');
+const resend = require('../utils/mailer');
 
 
 // GET all inquiries
@@ -68,8 +68,8 @@ router.post('/:id/send-payment-link', async (req, res) => {
     const toDate = inquiry.to_date ? new Date(inquiry.to_date).toLocaleDateString() : null;
     const dateRange = fromDate && toDate ? `${fromDate} – ${toDate}` : null;
 
-    await transporter.sendMail({
-      from: `"Sky Unlimited Travel" <${process.env.EMAIL_USER}>`,
+    await resend.emails.send({
+      from: `"Sky Unlimited Travel" <onboarding@resend.dev>`,
       to: inquiry.email,
       subject: 'Complete Your Travel Booking – Sky Unlimited Travel',
       html: `

@@ -8,10 +8,6 @@ const activeTokens = require('../auth/tokenStore');
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
-  console.log("BODY:", req.body);
-  console.log("USERNAME:", process.env.ADMIN_USERNAME);
-  console.log("PASSWORD HASH:", process.env.ADMIN_PASSWORD_HASH);
-
   const usernameMatch = username === process.env.ADMIN_USERNAME;
 
   const passwordMatch = await bcrypt.compare(
