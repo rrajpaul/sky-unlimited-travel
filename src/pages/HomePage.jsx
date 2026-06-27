@@ -38,7 +38,7 @@ const HomePage = () => {
         <Navbar />
         <main>
           <HeroSection />
-          <TravelSearch />
+          {/* <TravelSearch /> */}
           <div id="destinations">
             <UnitedStatesSection />
             <CaribbeanSection />
