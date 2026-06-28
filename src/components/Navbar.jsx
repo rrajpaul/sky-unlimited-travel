@@ -37,7 +37,7 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <a href="/" className="flex items-center gap-3">
           <img 
-            src="https://horizons-cdn.hostinger.com/623e1352-b968-425c-a6cd-1bbd5e65bf5c/5d362fd2245e7b3612555df328a686c5.jpg" 
+            src="/logo.png" 
             alt="Sky Unlimited Travel Logo" 
             className="h-10 w-auto rounded-full border border-white/20"
           />
