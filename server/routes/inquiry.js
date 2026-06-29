@@ -3,8 +3,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STRIPE_URL = 'https://buy.stripe.com/9B63cx7II4vfev51iF3Ru01';
-const resend = require('../utils/mailer');
-
+const { sendMail } = require('../utils/mailer');
 
 // GET all inquiries
 router.get('/', async (req, res) => {
@@ -68,8 +67,7 @@ router.post('/:id/send-payment-link', async (req, res) => {
     const toDate = inquiry.to_date ? new Date(inquiry.to_date).toLocaleDateString() : null;
     const dateRange = fromDate && toDate ? `${fromDate} – ${toDate}` : null;
 
-    await resend.emails.send({
-      from: `"Sky Unlimited Travel" <onboarding@resend.dev>`,
+    await sendMail({
       to: inquiry.email,
       subject: 'Complete Your Travel Booking – Sky Unlimited Travel',
       html: `
@@ -77,34 +75,21 @@ router.post('/:id/send-payment-link', async (req, res) => {
           <div style="background-color: #1a2947; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
             <h1 style="color: white; margin: 0; font-size: 24px;">Sky Unlimited Travel</h1>
           </div>
-
           <div style="background-color: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
             <h2 style="color: #1a2947; margin-top: 0;">Hello ${inquiry.name},</h2>
             <p style="color: #6b7280;">Thank you for your travel booking request. Your trip details are below:</p>
-
             <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin: 24px 0;">
-              ${destination ? `
-              <p style="margin: 4px 0; color: #374151;">
-                <strong>Destination:</strong> ${destination}
-              </p>` : ''}
-              ${dateRange ? `
-              <p style="margin: 4px 0; color: #374151;">
-                <strong>Travel Dates:</strong> ${dateRange}
-              </p>` : ''}
+              ${destination ? `<p style="margin: 4px 0; color: #374151;"><strong>Destination:</strong> ${destination}</p>` : ''}
+              ${dateRange ? `<p style="margin: 4px 0; color: #374151;"><strong>Travel Dates:</strong> ${dateRange}</p>` : ''}
             </div>
-
             <p style="color: #6b7280;">To secure your booking, please complete your payment by clicking the button below:</p>
-
             <div style="text-align: center; margin: 32px 0;">
-              <a href="${STRIPE_URL}"
-                style="background-color: #1a2947; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block;">
+              <a href="${STRIPE_URL}" style="background-color: #1a2947; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block;">
                 Complete Payment
               </a>
             </div>
-
             <p style="color: #9ca3af; font-size: 13px;">If you have any questions, please reply to this email and we'll be happy to help.</p>
             <p style="color: #9ca3af; font-size: 13px;">If you did not request this, please ignore this email.</p>
-
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
               © ${new Date().getFullYear()} Sky Unlimited Travel. All rights reserved.
@@ -180,6 +165,42 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     }
   }
   res.json({ received: true });
+});
+
+// POST notify admin of new inquiry
+router.post('/notify-admin', async (req, res) => {
+  const { name, email, phone, country, city, fromDate, toDate, details } = req.body;
+
+  try {
+    await sendMail({
+      to: process.env.ADMIN_EMAIL,
+      subject: `New Booking Request from ${name}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #1a2947; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">New Booking Request</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+            <h2 style="color: #1a2947; margin-top: 0;">Customer Details</h2>
+            <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin: 16px 0;">
+              <p style="margin: 6px 0; color: #374151;"><strong>Name:</strong> ${name}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Email:</strong> ${email}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Phone:</strong> ${phone || 'Not provided'}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Destination:</strong> ${[country, city].filter(Boolean).join(', ') || 'Not specified'}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Departure:</strong> ${fromDate || '—'}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Return:</strong> ${toDate || '—'}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Details:</strong> ${details || 'None'}</p>
+            </div>
+            <p style="color: #6b7280; font-size: 14px;">Log in to your admin panel to follow up.</p>
+          </div>
+        </div>
+      `,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Admin notification error:', err);
+    res.status(500).json({ error: 'Failed to send notification' });
+  }
 });
 
 module.exports = router;

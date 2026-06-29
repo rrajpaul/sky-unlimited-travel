@@ -95,6 +95,7 @@ const BookingProcessModal = ({ children, country: initialCountry = '', city: ini
     setErrorMsg('');
 
     try {
+      // Save inquiry
       const res = await fetch(apiUrl('/api/inquiry'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -106,6 +107,13 @@ const BookingProcessModal = ({ children, country: initialCountry = '', city: ini
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Request failed');
+
+      // Notify Tasha
+      await fetch(apiUrl('/api/inquiry/notify-admin'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
 
       setSuccess(true);
       setStatus('idle');

@@ -47,7 +47,7 @@
   {
     "@context": "https://schema.org",
     "@type": "TravelAgency",
-    "name": "Sky Unlimited Travel Inc.",
+    "name": "Sky Unlimited Travel",
     "url": "https://skyunlimitedtravelinc.com",
     "logo": "https://skyunlimitedtravelinc.com/logo.png",
     "image": "https://skyunlimitedtravelinc.com/og-image.jpg",
@@ -55,7 +55,12 @@
     "telephone": "+1-866-854-8348",
     "email": "info@skyunlimitedtravel.com",
     "priceRange": "$$",
-    "openingHours": "Mo-Fr 09:00-18:00",
+    "openingHoursSpecification": {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+      "opens": "09:00",
+      "closes": "18:00"
+    }
     "address": {
       "@type": "PostalAddress",
       "addressCountry": "US"
