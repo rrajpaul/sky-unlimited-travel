@@ -1,19 +1,23 @@
 import { useEffect, useRef, useState, Component } from 'react';
 
+const AVIASALES_LINK = 'https://aviasales.tpx.lu/3ribBZKz';
+
 const tabs = [
   { id: 'flights', label: '✈ Flights' },
-  { id: 'hotels', label: '🏨 Hotels' },
+  //{ id: 'hotels', label: '🏨 Hotels' },
 ];
 
 const WIDGETS = {
   flights: {
-    scriptSrc: 'https://tp.media/content?currency=usd&trs=386781&shmarker=741464&show_hotels=false&powered_by=true&locale=en&searchUrl=www.aviasales.com%2Fsearch&primary=%231a2947&color_button=%23ffffff&color_button_text=%231a2947&color_border=%231a2947&border_radius=8&plain=true&no_labels=&widget=aviasales&campaign_id=100',
+    scriptSrc:
+      'https://tpwdg.com/content?currency=usd&campaign_id=100&promo_id=7879&plain=false&border_radius=0&color_focused=%2332a8dd&special=%23C4C4C4&secondary=%23FFFFFF&light=%23FFFFFF&dark=%23262626&color_icons=%2332a8dd&color_button=%2332a8dd&primary_override=%2332a8dd&searchUrl=www.aviasales.com%2Fsearch&locale=en&powered_by=true&show_hotels=true&shmarker=741464&trs=543823',
     containerId: 'tp-flights-widget',
   },
-  hotels: {
-    scriptSrc: 'https://tp.media/content?currency=usd&trs=386781&shmarker=741464&show_hotels=true&show_flights=false&powered_by=true&locale=en&searchUrl=hotellook.com%2F&primary=%231a2947&color_button=%23ffffff&color_button_text=%231a2947&color_border=%231a2947&border_radius=8&plain=true&widget=hotellook&campaign_id=101',
-    containerId: 'tp-hotels-widget',
-  },
+  //hotels: {
+  //  scriptSrc:
+  //    'https://tpwdg.com/content?currency=usd&promo_id=4497&campaign_id=137&powered_by=true&amount=3&category=4&city_id=2&locale=en&shmarker=741464&trs=543823',
+  //  containerId: 'tp-hotels-widget',
+  //},
 };
 
 // Error Boundary to catch unexpected widget script crashes
@@ -37,7 +41,14 @@ class WidgetErrorBoundary extends Component {
         <div className="flex flex-col items-center justify-center py-10 text-gray-400 text-sm">
           <span className="text-2xl mb-2">✈</span>
           <p>Search unavailable right now.</p>
-          <p className="text-xs mt-1">Try refreshing or disabling your ad blocker.</p>
+          <a
+            href={AVIASALES_LINK}
+            target="_blank"
+            rel="noopener noreferrer sponsored"
+            className="mt-3 text-xs font-semibold text-[#1a2947] underline underline-offset-2 hover:text-[#2c426e]"
+          >
+            Search flights on Aviasales instead
+          </a>
         </div>
       );
     }
@@ -55,7 +66,7 @@ function TravelWidget({ type }) {
     if (!container) return;
 
     // Clear previous widget content + any injected iframes/styles
-    container.innerHTML = '';
+    container.replaceChildren();
 
     const script = document.createElement('script');
     script.src = scriptSrc;
@@ -76,9 +87,30 @@ function TravelWidget({ type }) {
   if (blocked) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-gray-400 text-sm">
-        <span className="text-2xl mb-2">🚫</span>
-        <p>Widget blocked by your browser or ad blocker.</p>
-        <p className="text-xs mt-1">Disable it to search flights and hotels here.</p>
+        <span className="text-2xl mb-2">
+          {type === 'hotels' ? '🏨' : '✈'}
+        </span>
+
+        <p>
+          {type === 'hotels'
+            ? 'Hotel search unavailable right now.'
+            : 'Flight search unavailable right now.'}
+        </p>
+
+        <a
+          href={
+            type === 'hotels'
+              ? 'https://www.hotellook.com/'
+              : AVIASALES_LINK
+          }
+          target="_blank"
+          rel="noopener noreferrer sponsored"
+          className="mt-3 text-xs font-semibold text-[#1a2947] underline"
+        >
+          {type === 'hotels'
+            ? 'Search hotels instead'
+            : 'Search flights on Aviasales instead'}
+        </a>
       </div>
     );
   }
@@ -125,12 +157,20 @@ export default function TravelSearch() {
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden p-4 min-h-[160px]">
           <WidgetErrorBoundary key={active}>
             {active === 'flights' && <TravelWidget key="flights" type="flights" />}
-            {active === 'hotels' && <TravelWidget key="hotels" type="hotels" />}
+            {/* {active === 'hotels' && <TravelWidget key="hotels" type="hotels" />} */}
           </WidgetErrorBoundary>
         </div>
 
         <p className="text-center text-white/30 text-xs mt-4">
-          Powered by Travelpayouts
+          Powered by{' '}
+          <a
+            href={AVIASALES_LINK}
+            target="_blank"
+            rel="noopener noreferrer sponsored"
+            className="underline underline-offset-2 hover:text-white/50 transition-colors"
+          >
+            Travelpayouts
+          </a>
         </p>
       </div>
     </section>
