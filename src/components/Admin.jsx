@@ -345,7 +345,7 @@ const AdminPage = () => {
                           disabled={reg.payment_status === 'paid'}
                           className="w-full text-center px-3 py-2 text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
                         >
-                          {reg.payment_link_sent ? 'Resend Link' : 'Send Link'}
+                          {reg.payment_link_sent ? 'Resend Link' : 'Send Link - Pending'}
                         </button>
                       </div>
                       <div>
@@ -464,7 +464,7 @@ const AdminPage = () => {
                                 disabled={reg.payment_status === 'paid'}
                                 className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
                               >
-                                {reg.payment_link_sent ? 'Resend Link' : 'Send Link'}
+                                {reg.payment_link_sent ? 'Resend Link' : 'Send Link - Pending'}
                               </button>
                             </div>
                             <div>
