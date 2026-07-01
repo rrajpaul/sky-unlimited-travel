@@ -5,9 +5,10 @@ import BookingProcessModal from '@/components/BookingProcessModal';
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const { scrollY } = useScroll();
+
   const backgroundColor = useTransform(
-    scrollY, 
-    [0, 50], 
+    scrollY,
+    [0, 50],
     ['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.95)']
   );
   const textColor = useTransform(
@@ -36,21 +37,21 @@ const Navbar = () => {
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <a href="/" className="flex items-center gap-3">
-          <img 
-            src="/logo.png" 
-            alt="Sky Unlimited Travel Logo" 
+          <img
+            src="/logo.png"
+            alt="Sky Unlimited Travel Logo"
             className="h-10 w-auto rounded-full border border-white/20"
           />
-          <motion.span 
+          <motion.span
             style={{ color: textColor }}
             className="font-bold text-lg hidden sm:block tracking-wide"
           >
             SKY UNLIMITED TRAVEL
           </motion.span>
         </a>
-        
+
         <div className="hidden md:flex gap-8">
-          {['Destinations', 'How It Works', 'Contact'].map((item) => (
+          {['Destinations', 'How It Works', 'About', 'Contact'].map((item) => (
             <motion.a
               key={item}
               href={`/#${item.toLowerCase().replace(/\s+/g, '-')}`}
