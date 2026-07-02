@@ -11,6 +11,7 @@ import EuropeSection from '@/components/EuropeSection';
 import CanadaSection from '@/components/CanadaSection';
 import AboutSection from '@/components/AboutSection';
 import ContactSection from '@/components/ContactSection';
+import CruisesSection from '@/components/CruisesSection';
 
 const HomePage = () => {
   return (
@@ -43,6 +44,7 @@ const HomePage = () => {
             <MexicoSection />
             <EuropeSection />
             <CanadaSection />
+            <CruisesSection />
           </div>
           <div id="how-it-works">
             <HowItWorks />

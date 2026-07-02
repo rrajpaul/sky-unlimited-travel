@@ -28,6 +28,7 @@ const countryCities = {
   'Mexico': ['Cancun'],
   'Netherlands': ['Amsterdam'],
   'Canada': ['Vancouver', 'Toronto', 'Montreal', 'Banff'],
+  'Cruise': ['Alaska', 'Caribbean Cruises', 'European Cruises', 'World Cruise'],
   'Other': ['Other']
 };
 
