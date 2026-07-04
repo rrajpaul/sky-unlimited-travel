@@ -27,7 +27,7 @@ const CanadaSection = () => {
           <DestinationCard 
             data={{
               ...destinationsData.montreal,
-              image: <img alt="Old Montreal Architecture" src="https://images.unsplash.com/photo-1551086054-1bc97d3466ba" />
+              image: <img alt="Old Montreal Architecture" src="/images/destinations/montreal.jpg" />
             }} 
           />
           

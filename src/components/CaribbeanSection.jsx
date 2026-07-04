@@ -26,7 +26,7 @@ const CaribbeanSection = () => {
           <DestinationCard 
             data={{
               ...destinationsData.antigua,
-              image: <img alt="Antigua Beaches" src="https://images.unsplash.com/photo-1610964395047-f064448dcb29" />
+              image: <img alt="Antigua Beaches" src="/images/destinations/antigua.jpg" />
             }} 
           />
           
@@ -34,7 +34,7 @@ const CaribbeanSection = () => {
           <DestinationCard 
             data={{
               ...destinationsData.trinidad,
-              image: <img alt="Trinidad Carnival and Nature" src="https://images.unsplash.com/photo-1697134970145-ce32fc3147f8" />
+              image: <img alt="Trinidad Carnival and Nature" src="/images/destinations/trinidad.jpg" />
             }} 
           />
         </div>
