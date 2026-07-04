@@ -67,7 +67,7 @@ const MexicoSection = () => {
                       </div>
                     </div>
                     <div className="pt-6 border-t border-gray-100 flex items-center justify-between gap-4">
-                      <BookingProcessModal>
+                      <BookingProcessModal country={data.country} city={data.city}>
                         <button className="w-full text-center bg-[#1a2947] text-white px-8 py-3 rounded-lg font-semibold hover:bg-[#2c426e] transition-colors duration-300 shadow-lg">
                           Book Your Trip
                         </button>
