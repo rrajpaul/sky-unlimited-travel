@@ -16,7 +16,6 @@ const steps = [
   { icon: CheckCircle2, title: 'Book with us', description: 'Initiate your travel request.', color: 'text-blue-500' },
   { icon: Calendar, title: 'We follow up', description: 'We will email or call you to schedule a consultation.', color: 'text-purple-500' },
   { icon: Phone, title: 'Consultation', description: 'Complete a detailed consultation over phone or video call.', color: 'text-green-500' },
-  { icon: CreditCard, title: 'Payment', description: 'Securely finalize your booking.', color: 'text-orange-500' },
 ];
 
 // Single source of truth: build destination options straight from destinationsData.
