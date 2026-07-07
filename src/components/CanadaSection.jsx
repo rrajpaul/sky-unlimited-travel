@@ -20,18 +20,17 @@ const CanadaSection = () => {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          <DestinationCard data={destinationsData.vancouver} />
-          <DestinationCard data={destinationsData.toronto} />
-          
+          <DestinationCard destinationKey="vancouver" data={destinationsData.vancouver} />
+          <DestinationCard destinationKey="toronto" data={destinationsData.toronto} />
           {/* Overriding image for Montreal with AI generation */}
           <DestinationCard 
+            destinationKey="montreal"
             data={{
               ...destinationsData.montreal,
               image: <img alt="Old Montreal Architecture" src="/images/destinations/montreal.jpg" />
             }} 
           />
-          
-          <DestinationCard data={destinationsData.banff} />
+          <DestinationCard destinationKey="banff" data={destinationsData.banff} />
         </div>
       </div>
     </section>

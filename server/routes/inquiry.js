@@ -20,7 +20,7 @@ router.get('/', async (req, res) => {
 
 // POST new inquiry
 router.post('/', async (req, res) => {
-  const { name, email, phone, country, city, details, fromDate, toDate } = req.body;
+  const { name, email, phone, destination, details, fromDate, toDate } = req.body;
   if (!name?.trim() || !email?.trim()) {
     return res.status(400).json({ error: 'Name and email are required.' });
   }
@@ -29,14 +29,13 @@ router.post('/', async (req, res) => {
   }
   try {
     await pool.query(
-      `INSERT INTO inquiries (type, name, email, phone, country, city, details, from_date, to_date)
-      VALUES ('booking', $1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO inquiries (type, name, email, phone, destination, details, from_date, to_date)
+      VALUES ('booking', $1, $2, $3, $4, $5, $6, $7)`,
       [
         name.trim(),
         email.trim(),
         phone?.trim() || null,
-        country?.trim() || null,
-        city?.trim() || null,
+        destination?.trim() || null,
         details?.trim() || null,
         fromDate || null,
         toDate || null
@@ -62,7 +61,7 @@ router.post('/:id/send-payment-link', async (req, res) => {
       return res.status(404).json({ error: 'Inquiry not found' });
     }
 
-    const destination = [inquiry.country, inquiry.city].filter(Boolean).join(', ');
+    const destination = inquiry.destination || null;
     const fromDate = inquiry.from_date ? new Date(inquiry.from_date).toLocaleDateString() : null;
     const toDate = inquiry.to_date ? new Date(inquiry.to_date).toLocaleDateString() : null;
     const dateRange = fromDate && toDate ? `${fromDate} – ${toDate}` : null;
@@ -169,7 +168,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
 // POST notify admin of new inquiry
 router.post('/notify-admin', async (req, res) => {
-  const { name, email, phone, country, city, fromDate, toDate, details } = req.body;
+  const { name, email, phone, destination, fromDate, toDate, details } = req.body;
 
   try {
     await sendMail({
@@ -186,7 +185,7 @@ router.post('/notify-admin', async (req, res) => {
               <p style="margin: 6px 0; color: #374151;"><strong>Name:</strong> ${name}</p>
               <p style="margin: 6px 0; color: #374151;"><strong>Email:</strong> ${email}</p>
               <p style="margin: 6px 0; color: #374151;"><strong>Phone:</strong> ${phone || 'Not provided'}</p>
-              <p style="margin: 6px 0; color: #374151;"><strong>Destination:</strong> ${[country, city].filter(Boolean).join(', ') || 'Not specified'}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Destination:</strong> ${destination || 'Not specified'}</p>
               <p style="margin: 6px 0; color: #374151;"><strong>Departure:</strong> ${fromDate || '—'}</p>
               <p style="margin: 6px 0; color: #374151;"><strong>Return:</strong> ${toDate || '—'}</p>
               <p style="margin: 6px 0; color: #374151;"><strong>Details:</strong> ${details || 'None'}</p>

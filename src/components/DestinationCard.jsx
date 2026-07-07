@@ -11,7 +11,12 @@ import {
 import { MapPin, Check } from 'lucide-react';
 import BookingProcessModal from '@/components/BookingProcessModal';
 
-const DestinationCard = ({ data, className }) => {
+// `destinationKey` is the key this entry has inside destinationsData (e.g. "miami").
+// It must be passed down from wherever this card is rendered, e.g.:
+//   Object.entries(destinationsData).map(([key, data]) => (
+//     <DestinationCard key={key} destinationKey={key} data={data} />
+//   ))
+const DestinationCard = ({ data, destinationKey, className }) => {
   // Handle image source whether it is a string URL or a React Element (from img-replace generation)
   let imageSrc = data.image;
   let imageAlt = data.title;
@@ -24,9 +29,6 @@ const DestinationCard = ({ data, className }) => {
       imageAlt = data.image.props.alt;
     }
   }
-
-  const country = data.country ?? data.subtitle ?? '';
-  const city = data.city ?? data.title ?? '';
 
   return (
     <Dialog>
@@ -109,7 +111,7 @@ const DestinationCard = ({ data, className }) => {
                 <p className="text-xs text-gray-400">Ready to explore?</p>
                 <p className="text-sm font-bold text-[#1a2947]">Plan your custom trip today</p>
               </div>
-              <BookingProcessModal country={country} city={city}>
+              <BookingProcessModal destination={destinationKey}>
                 <button
                   className="flex-1 sm:flex-none text-center bg-[#1a2947] text-white px-8 py-3 rounded-lg font-semibold hover:bg-[#2c426e] transition-colors duration-300 shadow-lg hover:shadow-xl"
                 >

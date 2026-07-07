@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, Calendar, Phone, CreditCard, ChevronRight } from 'lucide-react';
 import { apiUrl } from '@/lib/api';
+import { destinationsData } from '@/data/destinations'; // adjust path if needed
 
 const steps = [
   { icon: CheckCircle2, title: 'Book with us', description: 'Initiate your travel request.', color: 'text-blue-500' },
@@ -18,19 +19,15 @@ const steps = [
   { icon: CreditCard, title: 'Payment', description: 'Securely finalize your booking.', color: 'text-orange-500' },
 ];
 
-const countryCities = {
-  'France': ['Paris'],
-  'England': ['London'],
-  'Italy': ['Rome'],
-  'USA': ['Miami', 'Orlando'],
-  'Spain': ['Barcelona'],
-  'Caribbean': ['Jamaica', 'Antigua', 'Trinidad'],
-  'Mexico': ['Cancun'],
-  'Netherlands': ['Amsterdam'],
-  'Canada': ['Vancouver', 'Toronto', 'Montreal', 'Banff'],
-  'Cruise': ['Alaska', 'Caribbean Cruises', 'European Cruises', 'World Cruise'],
-  'Other': ['Other']
-};
+// Single source of truth: build destination options straight from destinationsData.
+// "Other" is kept as a manual fallback since it isn't a real entry.
+const destinationOptions = [
+  ...Object.entries(destinationsData).map(([key, d]) => ({
+    key,
+    title: d.title,
+  })),
+  { key: 'other', title: 'Other' },
+];
 
 const PANELS = [
   { id: 'contact', title: 'Contact Info', subtitle: 'How can we reach you?' },
@@ -38,17 +35,21 @@ const PANELS = [
   { id: 'details', title: 'Trip Details', subtitle: 'Tell us more' },
 ];
 
-const BookingProcessModal = ({ children, country: initialCountry = '', city: initialCity = '' }) => {
-  const getInitialForm = () => ({
-    name: '',
-    email: '',
-    phone: '',
-    country: initialCountry,
-    city: initialCity,
-    fromDate: '',
-    toDate: '',
-    details: ''
-  });
+const BookingProcessModal = ({ children, destination: initialDestination = '' }) => {
+  const getInitialForm = () => {
+    // initialDestination is a destinationsData key (e.g. "miami"); resolve it to its display title.
+    const selected = destinationOptions.find(d => d.key === initialDestination);
+    return {
+      name: '',
+      email: '',
+      phone: '',
+      destinationKey: initialDestination,
+      destination: selected?.title || '',
+      fromDate: '',
+      toDate: '',
+      details: ''
+    };
+  };
 
   const [form, setForm] = useState(getInitialForm);
   const [status, setStatus] = useState('idle');
@@ -62,13 +63,23 @@ const BookingProcessModal = ({ children, country: initialCountry = '', city: ini
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleDestinationChange = (e) => {
+    const key = e.target.value;
+    const selected = destinationOptions.find(d => d.key === key);
+    setForm(prev => ({
+      ...prev,
+      destinationKey: key,
+      destination: selected?.title || '',
+    }));
+  };
+
   const validatePanel = () => {
     if (currentPanel === 0) {
       if (!form.name.trim()) return 'Full name is required';
       if (!form.email.trim()) return 'Email address is required';
     }
     if (currentPanel === 1) {
-      if (!form.country) return 'Please select a country';
+      if (!form.destinationKey) return 'Please select a destination';
       if (!form.fromDate) return 'Please select a departure date';
       if (!form.toDate) return 'Please select a return date';
       if (form.fromDate && form.toDate && form.toDate < form.fromDate) return 'Return date must be after departure date';
@@ -265,44 +276,19 @@ const BookingProcessModal = ({ children, country: initialCountry = '', city: ini
                     transition={{ duration: 0.25 }}
                     className="space-y-3"
                   >
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Country *</label>
-                        <select
-                          name="country"
-                          value={form.country}
-                          onChange={(e) => {
-                            const selectedCountry = e.target.value;
-                            const cities = countryCities[selectedCountry] || [];
-                            setForm(prev => ({
-                              ...prev,
-                              country: selectedCountry,
-                              city: cities.length === 1 ? cities[0] : ''
-                            }));
-                          }}
-                          className={inputClass}
-                        >
-                          <option value="">Select country</option>
-                          {Object.keys(countryCities).map(c => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
-                        <select
-                          name="city"
-                          value={form.city}
-                          onChange={handleChange}
-                          disabled={!form.country}
-                          className={`${inputClass} disabled:opacity-50`}
-                        >
-                          <option value="">Select city</option>
-                          {(countryCities[form.country] || []).map(city => (
-                            <option key={city} value={city}>{city}</option>
-                          ))}
-                        </select>
-                      </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Destination *</label>
+                      <select
+                        name="destination"
+                        value={form.destinationKey}
+                        onChange={handleDestinationChange}
+                        className={inputClass}
+                      >
+                        <option value="">Select destination</option>
+                        {destinationOptions.map(d => (
+                          <option key={d.key} value={d.key}>{d.title}</option>
+                        ))}
+                      </select>
                     </div>
 
                     <div className="flex gap-2">

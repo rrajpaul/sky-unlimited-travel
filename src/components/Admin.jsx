@@ -186,8 +186,7 @@ const AdminPage = () => {
     return (
       reg.name?.toLowerCase().includes(search) ||
       reg.email?.toLowerCase().includes(search) ||
-      reg.country?.toLowerCase().includes(search) ||
-      reg.city?.toLowerCase().includes(search) ||
+      reg.destination?.toLowerCase().includes(search) ||
       formatDate(reg.created_at).toLowerCase().includes(search)
     );
   });
@@ -301,7 +300,7 @@ const AdminPage = () => {
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate">{reg.name}</p>
                       <p className="text-xs text-gray-500 truncate">{reg.email}</p>
-                      <p className="text-xs text-gray-500">{reg.country}{reg.city ? `, ${reg.city}` : ''}</p>
+                      <p className="text-xs text-gray-500">{reg.destination || '—'}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -425,7 +424,7 @@ const AdminPage = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {reg.country}{reg.city ? `, ${reg.city}` : ''}
+                        {reg.destination || '—'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {reg.phone || 'N/A'}

@@ -20,18 +20,18 @@ const CaribbeanSection = () => {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <DestinationCard data={destinationsData.jamaica} />
-          
+          <DestinationCard destinationKey="jamaica" data={destinationsData.jamaica} />
           {/* Overriding image for Antigua with AI generation */}
           <DestinationCard 
+            destinationKey="antigua"
             data={{
               ...destinationsData.antigua,
               image: <img alt="Antigua Beaches" src="/images/destinations/antigua.jpg" />
             }} 
           />
-          
           {/* Overriding image for Trinidad with AI generation */}
           <DestinationCard 
+            destinationKey="trinidad"
             data={{
               ...destinationsData.trinidad,
               image: <img alt="Trinidad Carnival and Nature" src="/images/destinations/trinidad.jpg" />

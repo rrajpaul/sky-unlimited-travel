@@ -19,10 +19,10 @@ const CruisesSection = () => {
           <div className="w-20 h-1 bg-[#1a2947] mx-auto"></div>
         </motion.div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          <DestinationCard data={destinationsData.alaska} />
-          <DestinationCard data={destinationsData.caribbeanCruise} />
-          <DestinationCard data={destinationsData.europeanCruise} />
-          <DestinationCard data={destinationsData.worldCruise} />
+          <DestinationCard destinationKey="alaska" data={destinationsData.alaska} />
+          <DestinationCard destinationKey="caribbeanCruise" data={destinationsData.caribbeanCruise} />
+          <DestinationCard destinationKey="europeanCruise" data={destinationsData.europeanCruise} />
+          <DestinationCard destinationKey="worldCruise" data={destinationsData.worldCruise} />
         </div>
       </div>
     </section>

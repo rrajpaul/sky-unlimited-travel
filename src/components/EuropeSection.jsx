@@ -20,11 +20,11 @@ const EuropeSection = () => {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-          <DestinationCard data={destinationsData.paris} />
-          <DestinationCard data={destinationsData.rome} />
-          <DestinationCard data={destinationsData.london} />
-          <DestinationCard data={destinationsData.barcelona} />
-          <DestinationCard data={destinationsData.amsterdam} />
+          <DestinationCard destinationKey="paris" data={destinationsData.paris} />
+          <DestinationCard destinationKey="rome" data={destinationsData.rome} />
+          <DestinationCard destinationKey="london" data={destinationsData.london} />
+          <DestinationCard destinationKey="barcelona" data={destinationsData.barcelona} />
+          <DestinationCard destinationKey="amsterdam" data={destinationsData.amsterdam} />
         </div>
       </div>
     </section>
