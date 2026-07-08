@@ -198,7 +198,7 @@ const ContactSection = () => {
           transition={{ duration: 0.6, delay: 0.6 }}
         >
           <img
-            src="https://horizons-cdn.hostinger.com/623e1352-b968-425c-a6cd-1bbd5e65bf5c/5d362fd2245e7b3612555df328a686c5.jpg"
+            src="./logo.png"
             alt="Sky Unlimited Travel Logo"
             className="w-64 h-auto mx-auto"
           />
