@@ -25,6 +25,16 @@ async function initDb() {
       to_date DATE
     )
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS giveaway_entries (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      destination VARCHAR(20) NOT NULL DEFAULT 'Either',
+      is_winner BOOLEAN DEFAULT false,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
   console.log('Database ready');
 }
 

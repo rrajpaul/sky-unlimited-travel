@@ -12,6 +12,7 @@ import CanadaSection from '@/components/CanadaSection';
 import AboutSection from '@/components/AboutSection';
 import ContactSection from '@/components/ContactSection';
 import CruisesSection from '@/components/CruisesSection';
+import GiveawaySection from '@/components/GiveawaySection';
 
 const HomePage = () => {
   return (
@@ -37,6 +38,7 @@ const HomePage = () => {
         <Navbar />
         <main>
           <HeroSection />
+          <GiveawaySection />
           <TravelSearch />
           <div id="destinations">
             <UnitedStatesSection />

@@ -5,6 +5,7 @@ const { initDb } = require('./db');
 const contactRoutes = require('./routes/contact');
 const inquiryRoutes = require('./routes/inquiry');
 const adminRoutes = require('./routes/admin');
+const giveawayRoutes = require('./routes/giveaway');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -29,6 +30,7 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/contact', contactRoutes);
 app.use('/api/inquiry', inquiryRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/giveaway', giveawayRoutes);
 
 initDb()
   .then(() => app.listen(PORT, () => console.log(`Server on port ${PORT}`)))

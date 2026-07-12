@@ -261,6 +261,13 @@ const AdminPage = () => {
               Open Main Site
             </a>
 
+            <a
+              href="/admin/giveaway"
+              className="px-4 py-2 text-sm font-medium rounded-md text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors duration-200"
+            >
+              Giveaway Entries
+            </a>
+
             <button
               onClick={handleLogout}
               className="px-4 py-2 text-sm font-medium rounded-md text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-200"
@@ -304,7 +311,6 @@ const AdminPage = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {/* Submitted replaces Paid/Unpaid badge in mobile parent row */}
                     <div className="text-right">
                       <p className="text-xs text-gray-400">Submitted</p>
                       <p className="text-xs font-medium text-gray-700">{formatDate(reg.created_at)}</p>
@@ -319,7 +325,6 @@ const AdminPage = () => {
                 {expandedRows[reg.id] && (
                   <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
 
-                    {/* Mobile Row 1 — From Date, To Date, Additional Details spans 2 */}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">From Date</p>
@@ -335,7 +340,6 @@ const AdminPage = () => {
                       </div>
                     </div>
 
-                    {/* Mobile Row 2 — Action, Link Sent, Toggle, Payment */}
                     <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100">
                       <div>
                         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Action</p>
@@ -438,7 +442,6 @@ const AdminPage = () => {
                       <tr className="bg-indigo-50">
                         <td colSpan={5} className="px-6 py-5 space-y-4">
 
-                          {/* Desktop Row 1 — From Date, To Date, Additional Details spans 2 */}
                           <div className="grid grid-cols-4 gap-6">
                             <div>
                               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">From Date</p>
@@ -454,7 +457,6 @@ const AdminPage = () => {
                             </div>
                           </div>
 
-                          {/* Desktop Row 2 — Action, Link Sent, Paid/Unpaid, Payment */}
                           <div className="grid grid-cols-4 gap-6 pt-3 border-t border-indigo-100">
                             <div>
                               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Action</p>
