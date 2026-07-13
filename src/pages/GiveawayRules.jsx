@@ -11,13 +11,18 @@ import { apiUrl } from '@/lib/api';
  *   ...
  *   <Route path="/giveaway-rules" element={<GiveawayRules />} />
  *
- * Dates and prize amounts are pulled live from GET /api/giveaway/settings
- * (the same source AdminGiveawayEntries.jsx writes to) — update them there,
- * not here. Everything else below is still a general template: fill in
- * every remaining [BRACKETED] placeholder (address, draw date, claim
- * windows, governing state/province, contact info) before publishing, and
- * consider a quick legal review, especially since Canadian entrants are
- * included.
+ * Dates, prize amounts, and destination(s) are pulled live from
+ * GET /api/giveaway/settings (the same source AdminGiveawayEntries.jsx
+ * writes to) — update them there, not here.
+ *
+ * Everything else is filled in per your latest instructions: draw date
+ * Aug 1, 2026; 3 months to redeem; winner notified within 3 business days;
+ * winner must respond within 7 business days; eligibility limited to
+ * Ontario, Canada and Florida, USA; contact info@skyunlimitedtravel.com.
+ *
+ * Still a placeholder: Sponsor's business address in Section 1. This is a
+ * general template, not reviewed by an attorney — consider a quick legal
+ * review before publishing, especially since Canadian entrants are included.
  */
 
 const formatDate = (date) =>
@@ -32,6 +37,13 @@ const GiveawayRules = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
+  const formatDestinationList = (destinations) => {
+    if (!destinations || destinations.length === 0) return 'the applicable destination';
+    if (destinations.length === 1) return destinations[0];
+    if (destinations.length === 2) return `${destinations[0]} or ${destinations[1]}`;
+    return `${destinations.slice(0, -1).join(', ')}, or ${destinations[destinations.length - 1]}`;
+  };
+
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -43,6 +55,7 @@ const GiveawayRules = () => {
           end: new Date(data.endDate),
           prizeValueUsd: data.prizeValueUsd,
           prizeValueCad: data.prizeValueCad,
+          destinations: data.destinations || [],
         });
       } catch (err) {
         console.error('Giveaway settings load error:', err);
@@ -66,8 +79,8 @@ const GiveawayRules = () => {
 
         <h1 className="text-3xl font-bold text-[#1a2947] mt-6 mb-2">
           {settings
-            ? `$${settings.prizeValueUsd} Bahamas or Jamaica Giveaway — Official Rules`
-            : 'Bahamas or Jamaica Giveaway — Official Rules'}
+            ? `$${settings.prizeValueUsd} ${formatDestinationList(settings.destinations)} Giveaway — Official Rules`
+            : 'Travel Giveaway — Official Rules'}
         </h1>
         <p className="text-slate-500 mb-10">
           Sky Unlimited Travel Inc.
@@ -104,11 +117,13 @@ const GiveawayRules = () => {
               2. Eligibility
             </h2>
             <p>
-              The Giveaway is open to legal residents of the United States and
-              Canada (excluding Quebec) who are at least 18 years old at the
-              time of entry. Employees of Sponsor and their immediate family
-              members (spouse, parents, children, siblings) or household
-              members are not eligible to enter. Void where prohibited by law.
+              The Giveaway is open only to legal residents of{' '}
+              <strong>Ontario, Canada</strong> and <strong>Florida, USA</strong>{' '}
+              who are at least 18 years old at the time of entry. Residents of
+              any other province, state, or country are not eligible to
+              enter. Employees of Sponsor and their immediate family members
+              (spouse, parents, children, siblings) or household members are
+              not eligible to enter. Void where prohibited by law.
             </p>
           </section>
 
@@ -136,8 +151,10 @@ const GiveawayRules = () => {
             </h2>
             <p>
               To enter, complete the entry form on Sponsor's website at
-              skyunlimitedtravelinc.com, providing your name, email address,
-              and destination preference (Bahamas or Jamaica). Limit{' '}
+              skyunlimitedtravelinc.com, providing your name, email address
+              {settings && settings.destinations && settings.destinations.length > 1
+                ? `, and destination preference (${formatDestinationList(settings.destinations)})`
+                : ''}. Limit{' '}
               <strong>one (1) entry per person / email address</strong> for
               the duration of the Entry Period. Multiple entries from the
               same person will be disqualified.
@@ -156,7 +173,7 @@ const GiveawayRules = () => {
                   : '[$X credit]'}
               </strong>{' '}
               ("Prize") toward the purchase of a Sky Unlimited Travel package
-              to the Bahamas or Jamaica. The Prize:
+              to {settings ? formatDestinationList(settings.destinations) : '[destination]'}. The Prize:
             </p>
             <ul className="list-disc pl-6 space-y-1">
               <li>
@@ -165,7 +182,7 @@ const GiveawayRules = () => {
               </li>
               <li>
                 Must be used toward a Sky Unlimited Travel booking within{' '}
-                <strong>[X months]</strong> of the winner notification date,
+                <strong>3 months</strong> of the winner notification date,
                 after which it expires.
               </li>
               <li>
@@ -192,9 +209,9 @@ const GiveawayRules = () => {
             <p>
               The winner will be selected at random from all eligible entries
               received during the Entry Period, on or about{' '}
-              <strong>[DRAW DATE]</strong>. The winner will be notified by
-              email within <strong>[X business days]</strong> of the drawing.
-              The winner must respond within <strong>[X days]</strong> of
+              <strong>August 1, 2026</strong>. The winner will be notified by
+              email within <strong>3 business days</strong> of the drawing.
+              The winner must respond within <strong>7 business days</strong> of
               notification to claim the Prize; if unclaimed within that time,
               an alternate winner may be selected.
             </p>
@@ -264,11 +281,13 @@ const GiveawayRules = () => {
               11. Disputes
             </h2>
             <p>
-              This Giveaway is governed by the laws of{' '}
-              <strong>[YOUR STATE/PROVINCE]</strong>, without regard to
-              conflict-of-law principles. Any disputes arising from this
-              Giveaway shall be resolved individually, without resort to
-              class action.
+              This Giveaway is governed by the laws of the{' '}
+              <strong>Province of Ontario, Canada</strong>, for entrants
+              residing in Ontario, or the laws of the{' '}
+              <strong>State of Florida, USA</strong>, for entrants residing
+              in Florida, without regard to conflict-of-law principles. Any
+              disputes arising from this Giveaway shall be resolved
+              individually, without resort to class action.
             </p>
           </section>
 
@@ -291,21 +310,20 @@ const GiveawayRules = () => {
             <p>
               For questions about these Official Rules or to request the
               name of the winner after the Giveaway ends, contact:{' '}
-              <strong>[SPONSOR EMAIL / CONTACT INFO]</strong>.
+              <strong>info@skyunlimitedtravel.com</strong>.
             </p>
           </section>
 
           <hr className="my-8 border-slate-200" />
 
           <p className="text-xs text-slate-400 italic">
-            Dates and prize amounts above are pulled live from your giveaway
-            settings (set in the admin page) and update automatically.
-            Remaining fields in brackets [ ] still need to be filled in with
-            your specific details before publishing (address, draw date,
-            claim windows, governing state/province, contact email, etc.).
-            This document is a general template and has not been reviewed by
-            an attorney — recommended before running any prize giveaway,
-            particularly one open to Canadian residents.
+            Dates, prize amounts, and destination(s) above are pulled live
+            from your giveaway settings (set in the admin page) and update
+            automatically. The Sponsor's business address in Section 1 still
+            needs to be filled in before publishing. This document is a
+            general template and has not been reviewed by an attorney —
+            recommended before running any prize giveaway, particularly one
+            involving Canadian entrants.
           </p>
         </div>
       </div>

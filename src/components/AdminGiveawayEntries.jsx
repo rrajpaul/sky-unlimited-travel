@@ -12,6 +12,9 @@ function toDatetimeLocalValue(isoString) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Keep in sync with ALLOWED_DESTINATIONS in routes/giveaway.js
+const ALL_DESTINATIONS = ['Bahamas', 'Jamaica'];
+
 const AdminGiveawayEntries = () => {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +27,7 @@ const AdminGiveawayEntries = () => {
   const [endDate, setEndDate] = useState('');
   const [prizeValueUsd, setPrizeValueUsd] = useState('');
   const [prizeValueCad, setPrizeValueCad] = useState('');
+  const [destinations, setDestinations] = useState([]);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState('');
@@ -40,6 +44,7 @@ const AdminGiveawayEntries = () => {
       setEndDate(toDatetimeLocalValue(data.endDate));
       setPrizeValueUsd(String(data.prizeValueUsd ?? ''));
       setPrizeValueCad(String(data.prizeValueCad ?? ''));
+      setDestinations(Array.isArray(data.destinations) ? data.destinations : []);
     } catch (err) {
       setSettingsError(err.message || 'Failed to load giveaway settings');
     } finally {
@@ -64,6 +69,7 @@ const AdminGiveawayEntries = () => {
           endDate: new Date(endDate).toISOString(),
           prizeValueUsd: parseFloat(prizeValueUsd),
           prizeValueCad: parseFloat(prizeValueCad),
+          destinations,
         }),
       });
 
@@ -82,6 +88,12 @@ const AdminGiveawayEntries = () => {
     } finally {
       setSettingsSaving(false);
     }
+  };
+
+  const toggleDestination = (dest) => {
+    setDestinations((prev) =>
+      prev.includes(dest) ? prev.filter((d) => d !== dest) : [...prev, dest]
+    );
   };
 
   // --- Entries ---
@@ -302,15 +314,37 @@ const AdminGiveawayEntries = () => {
                   />
                 </div>
               </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Destinations
+                </label>
+                <div className="flex gap-3 pt-1.5">
+                  {ALL_DESTINATIONS.map((dest) => (
+                    <label key={dest} className="flex items-center gap-1.5 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={destinations.includes(dest)}
+                        onChange={() => toggleDestination(dest)}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      {dest}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               <button
                 type="submit"
-                disabled={settingsSaving}
+                disabled={settingsSaving || destinations.length === 0}
                 className="px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors disabled:opacity-60"
               >
                 {settingsSaving ? 'Saving…' : 'Save Settings'}
               </button>
               {settingsSaved && (
                 <span className="text-sm text-green-600 font-medium">Saved ✓</span>
+              )}
+              {destinations.length === 0 && (
+                <span className="text-sm text-red-500">Select at least one destination</span>
               )}
             </form>
           )}

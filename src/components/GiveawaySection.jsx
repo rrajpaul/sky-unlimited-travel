@@ -11,22 +11,30 @@ import { apiUrl } from '@/lib/api';
  *   ...
  *   <GiveawaySection />
  *
- * DATES: no longer hardcoded here. On load, this component fetches the
- * current giveaway window from GET /api/giveaway/settings (set from the
- * admin page). Change the dates any time in AdminGiveawayEntries — this
- * component picks them up automatically on next page load, no redeploy
- * needed.
+ * Everything (dates, prize amount, active destinations) comes from
+ * GET /api/giveaway/settings — set from AdminGiveawayEntries.jsx. When only
+ * one destination is active (e.g. just Jamaica), the destination picker is
+ * hidden entirely and that destination is submitted automatically. When
+ * more than one is active, a dropdown appears with those options plus
+ * "Either — surprise me".
  */
 
 const formatDate = (date) =>
   date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
+const formatDestinationList = (destinations) => {
+  if (!destinations || destinations.length === 0) return '';
+  if (destinations.length === 1) return destinations[0];
+  if (destinations.length === 2) return `${destinations[0]} or ${destinations[1]}`;
+  return `${destinations.slice(0, -1).join(', ')}, or ${destinations[destinations.length - 1]}`;
+};
+
 const GiveawaySection = () => {
-  const [form, setForm] = useState({ name: '', email: '', destination: 'Bahamas' });
+  const [form, setForm] = useState({ name: '', email: '', destination: '' });
   const [status, setStatus] = useState('idle'); // idle | submitting | success | error
   const [errorMessage, setErrorMessage] = useState('');
 
-  const [settings, setSettings] = useState(null); // { start, end, prizeValueUsd, prizeValueCad }
+  const [settings, setSettings] = useState(null); // { start, end, prizeValueUsd, prizeValueCad, destinations }
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState(false);
 
@@ -36,12 +44,21 @@ const GiveawaySection = () => {
         const res = await fetch(apiUrl('/api/giveaway/settings'));
         if (!res.ok) throw new Error('Failed to load giveaway settings');
         const data = await res.json();
-        setSettings({
+        const loaded = {
           start: new Date(data.startDate),
           end: new Date(data.endDate),
           prizeValueUsd: data.prizeValueUsd,
           prizeValueCad: data.prizeValueCad,
-        });
+          destinations: data.destinations || [],
+        };
+        setSettings(loaded);
+        // If there's only one destination, pre-fill it since there's no
+        // real choice for the visitor to make.
+        if (loaded.destinations.length === 1) {
+          setForm((f) => ({ ...f, destination: loaded.destinations[0] }));
+        } else if (loaded.destinations.length > 1) {
+          setForm((f) => ({ ...f, destination: loaded.destinations[0] }));
+        }
       } catch (err) {
         console.error('Giveaway settings load error:', err);
         setSettingsError(true);
@@ -62,6 +79,8 @@ const GiveawaySection = () => {
     : now > settings.end
     ? 'ended'
     : 'active';
+
+  const multipleDestinations = settings?.destinations?.length > 1;
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -88,19 +107,18 @@ const GiveawaySection = () => {
       }
 
       setStatus('success');
-      setForm({ name: '', email: '', destination: 'Bahamas' });
+      setForm({ name: '', email: '', destination: settings?.destinations?.[0] || '' });
     } catch (err) {
       setStatus('error');
       setErrorMessage(err.message || 'Something went wrong — please try again.');
     }
   };
 
-  // Don't render anything until we know the giveaway window — avoids a
-  // flash of the wrong state (e.g. showing the form for a split second
-  // before we know it's actually "ended").
   if (giveawayStatus === 'loading') {
     return null;
   }
+
+  const destinationLabel = settings ? formatDestinationList(settings.destinations) : '';
 
   return (
     <section
@@ -117,13 +135,13 @@ const GiveawaySection = () => {
           className="text-3xl md:text-4xl font-bold mb-4"
         >
           {settings
-            ? `Win $${settings.prizeValueUsd} off your Bahamas or Jamaica trip`
-            : 'Win big off your Bahamas or Jamaica trip'}
+            ? `Win $${settings.prizeValueUsd} off your ${destinationLabel} trip`
+            : 'Win big off your next trip'}
         </h2>
         <p className="text-white/70 mb-2 max-w-xl mx-auto">
           Enter for a chance to win a credit toward any Sky Unlimited
-          Travel package to the Bahamas or Jamaica. No purchase necessary —
-          just tell us where you'd rather go.
+          Travel package to {destinationLabel || 'your destination'}. No
+          purchase necessary{multipleDestinations ? " — just tell us where you'd rather go." : '.'}
         </p>
         {settings && (
           <p className="text-white/50 text-sm mb-6 max-w-xl mx-auto">
@@ -217,25 +235,28 @@ const GiveawaySection = () => {
               />
             </div>
 
-            <div className="mb-6">
-              <label
-                htmlFor="giveaway-destination"
-                className="block text-sm font-medium text-slate-700 mb-1"
-              >
-                Which trip are you hoping for?
-              </label>
-              <select
-                id="giveaway-destination"
-                name="destination"
-                value={form.destination}
-                onChange={handleChange}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
-              >
-                <option value="Bahamas">Bahamas</option>
-                <option value="Jamaica">Jamaica</option>
-                <option value="Either">Either — surprise me</option>
-              </select>
-            </div>
+            {multipleDestinations && (
+              <div className="mb-6">
+                <label
+                  htmlFor="giveaway-destination"
+                  className="block text-sm font-medium text-slate-700 mb-1"
+                >
+                  Which trip are you hoping for?
+                </label>
+                <select
+                  id="giveaway-destination"
+                  name="destination"
+                  value={form.destination}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
+                >
+                  {settings.destinations.map((dest) => (
+                    <option key={dest} value={dest}>{dest}</option>
+                  ))}
+                  <option value="Either">Either — surprise me</option>
+                </select>
+              </div>
+            )}
 
             <button
               type="submit"

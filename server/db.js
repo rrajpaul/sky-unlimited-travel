@@ -35,24 +35,38 @@ async function initDb() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
-    await pool.query(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS giveaway_settings (
       id INTEGER PRIMARY KEY DEFAULT 1,
       start_date TIMESTAMPTZ NOT NULL,
       end_date TIMESTAMPTZ NOT NULL,
       prize_value_usd NUMERIC(10,2) NOT NULL DEFAULT 200,
       prize_value_cad NUMERIC(10,2) NOT NULL DEFAULT 270,
+      destinations JSONB NOT NULL DEFAULT '["Jamaica"]',
       updated_at TIMESTAMPTZ DEFAULT NOW(),
       CONSTRAINT single_row CHECK (id = 1)
     )
+  `);
+
+  // Safety net: if giveaway_settings already existed from an earlier version
+  // of this migration (before prize_value_usd/cad or destinations existed),
+  // CREATE TABLE IF NOT EXISTS above is a no-op and won't add the missing
+  // columns. These ALTER TABLE statements are idempotent (safe to run every
+  // startup) and make sure the columns exist regardless of which version of
+  // the table this environment started with.
+  await pool.query(`
+    ALTER TABLE giveaway_settings
+      ADD COLUMN IF NOT EXISTS prize_value_usd NUMERIC(10,2) NOT NULL DEFAULT 200,
+      ADD COLUMN IF NOT EXISTS prize_value_cad NUMERIC(10,2) NOT NULL DEFAULT 270,
+      ADD COLUMN IF NOT EXISTS destinations JSONB NOT NULL DEFAULT '["Jamaica"]'
   `);
 
   // Seed a default row if none exists yet, so the site has *something* to show
   // on first deploy rather than erroring out. Adjust these defaults as needed —
   // you can always change them from the admin page afterward.
   await pool.query(`
-    INSERT INTO giveaway_settings (id, start_date, end_date, prize_value_usd, prize_value_cad)
-    VALUES (1, '2026-08-10T00:00:00-04:00', '2026-08-31T23:59:59-04:00', 200, 270)
+    INSERT INTO giveaway_settings (id, start_date, end_date, prize_value_usd, prize_value_cad, destinations)
+    VALUES (1, '2026-08-10T00:00:00-04:00', '2026-08-31T23:59:59-04:00', 200, 270, '["Jamaica"]')
     ON CONFLICT (id) DO NOTHING
   `);
   console.log('Database ready');
