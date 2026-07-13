@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiUrl } from '@/lib/api';
 
 /**
@@ -11,14 +11,57 @@ import { apiUrl } from '@/lib/api';
  *   ...
  *   <GiveawaySection />
  *
- * Submits to POST /api/giveaway using the same apiUrl() helper your other
- * components (e.g. Admin.jsx) use to reach the backend.
+ * DATES: no longer hardcoded here. On load, this component fetches the
+ * current giveaway window from GET /api/giveaway/settings (set from the
+ * admin page). Change the dates any time in AdminGiveawayEntries — this
+ * component picks them up automatically on next page load, no redeploy
+ * needed.
  */
+
+const formatDate = (date) =>
+  date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
 const GiveawaySection = () => {
   const [form, setForm] = useState({ name: '', email: '', destination: 'Bahamas' });
   const [status, setStatus] = useState('idle'); // idle | submitting | success | error
   const [errorMessage, setErrorMessage] = useState('');
+
+  const [settings, setSettings] = useState(null); // { start, end, prizeValueUsd, prizeValueCad }
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsError, setSettingsError] = useState(false);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await fetch(apiUrl('/api/giveaway/settings'));
+        if (!res.ok) throw new Error('Failed to load giveaway settings');
+        const data = await res.json();
+        setSettings({
+          start: new Date(data.startDate),
+          end: new Date(data.endDate),
+          prizeValueUsd: data.prizeValueUsd,
+          prizeValueCad: data.prizeValueCad,
+        });
+      } catch (err) {
+        console.error('Giveaway settings load error:', err);
+        setSettingsError(true);
+      } finally {
+        setSettingsLoading(false);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  const now = new Date();
+  const giveawayStatus = settingsLoading
+    ? 'loading'
+    : settingsError || !settings
+    ? 'unknown'
+    : now < settings.start
+    ? 'upcoming'
+    : now > settings.end
+    ? 'ended'
+    : 'active';
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -27,6 +70,7 @@ const GiveawaySection = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name.trim() || !form.email.trim()) return;
+    if (giveawayStatus !== 'active') return;
 
     setStatus('submitting');
     setErrorMessage('');
@@ -51,6 +95,13 @@ const GiveawaySection = () => {
     }
   };
 
+  // Don't render anything until we know the giveaway window — avoids a
+  // flash of the wrong state (e.g. showing the form for a split second
+  // before we know it's actually "ended").
+  if (giveawayStatus === 'loading') {
+    return null;
+  }
+
   return (
     <section
       id="giveaway"
@@ -65,15 +116,55 @@ const GiveawaySection = () => {
           id="giveaway-heading"
           className="text-3xl md:text-4xl font-bold mb-4"
         >
-          Win $200 off your Bahamas or Jamaica trip
+          {settings
+            ? `Win $${settings.prizeValueUsd} off your Bahamas or Jamaica trip`
+            : 'Win big off your Bahamas or Jamaica trip'}
         </h2>
-        <p className="text-white/70 mb-8 max-w-xl mx-auto">
-          Enter for a chance to win a $150 USD or $200 CAD credit toward any Sky Unlimited
+        <p className="text-white/70 mb-2 max-w-xl mx-auto">
+          Enter for a chance to win a credit toward any Sky Unlimited
           Travel package to the Bahamas or Jamaica. No purchase necessary —
           just tell us where you'd rather go.
         </p>
+        {settings && (
+          <p className="text-white/50 text-sm mb-6 max-w-xl mx-auto">
+            ${settings.prizeValueUsd} USD / ${settings.prizeValueCad} CAD
+          </p>
+        )}
 
-        {status === 'success' ? (
+        {giveawayStatus !== 'unknown' && settings && (
+          <p className="text-blue-200/70 text-sm mb-8 -mt-4">
+            {giveawayStatus === 'upcoming' && `Entries open ${formatDate(settings.start)}`}
+            {giveawayStatus === 'active' && `Enter by ${formatDate(settings.end)}`}
+            {giveawayStatus === 'ended' && `Entries closed ${formatDate(settings.end)}`}
+          </p>
+        )}
+
+        {giveawayStatus === 'unknown' && (
+          <div className="bg-white/10 border border-white/20 rounded-xl px-6 py-8 max-w-md mx-auto">
+            <p className="text-lg font-semibold mb-1">Giveaway coming soon</p>
+            <p className="text-white/70 text-sm">Check back shortly!</p>
+          </div>
+        )}
+
+        {giveawayStatus === 'upcoming' && (
+          <div className="bg-white/10 border border-white/20 rounded-xl px-6 py-8 max-w-md mx-auto">
+            <p className="text-lg font-semibold mb-1">Coming soon</p>
+            <p className="text-white/70 text-sm">
+              Entries open {formatDate(settings.start)}. Check back then!
+            </p>
+          </div>
+        )}
+
+        {giveawayStatus === 'ended' && (
+          <div className="bg-white/10 border border-white/20 rounded-xl px-6 py-8 max-w-md mx-auto">
+            <p className="text-lg font-semibold mb-1">This giveaway has ended</p>
+            <p className="text-white/70 text-sm">
+              Thanks to everyone who entered — stay tuned for the next one!
+            </p>
+          </div>
+        )}
+
+        {giveawayStatus === 'active' && (status === 'success' ? (
           <div
             role="status"
             className="bg-white/10 border border-white/20 rounded-xl px-6 py-8 max-w-md mx-auto"
@@ -168,7 +259,7 @@ const GiveawaySection = () => {
               .
             </p>
           </form>
-        )}
+        ))}
       </div>
     </section>
   );
