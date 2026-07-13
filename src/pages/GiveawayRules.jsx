@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { apiUrl } from '@/lib/api';
 
 /**
  * GiveawayRules
@@ -10,14 +11,49 @@ import React from 'react';
  *   ...
  *   <Route path="/giveaway-rules" element={<GiveawayRules />} />
  *
- * IMPORTANT: Fill in every [BRACKETED] placeholder below with your real
- * details before publishing (dates, address, contact email, governing
- * state/province). This is a general template, not reviewed by an attorney —
+ * Dates and prize amounts are pulled live from GET /api/giveaway/settings
+ * (the same source AdminGiveawayEntries.jsx writes to) — update them there,
+ * not here. Everything else below is still a general template: fill in
+ * every remaining [BRACKETED] placeholder (address, draw date, claim
+ * windows, governing state/province, contact info) before publishing, and
  * consider a quick legal review, especially since Canadian entrants are
  * included.
  */
 
+const formatDate = (date) =>
+  date.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
 const GiveawayRules = () => {
+  const [settings, setSettings] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await fetch(apiUrl('/api/giveaway/settings'));
+        if (!res.ok) throw new Error('Failed to load giveaway settings');
+        const data = await res.json();
+        setSettings({
+          start: new Date(data.startDate),
+          end: new Date(data.endDate),
+          prizeValueUsd: data.prizeValueUsd,
+          prizeValueCad: data.prizeValueCad,
+        });
+      } catch (err) {
+        console.error('Giveaway settings load error:', err);
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSettings();
+  }, []);
+
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-3xl mx-auto px-6 py-16">
@@ -29,11 +65,23 @@ const GiveawayRules = () => {
         </a>
 
         <h1 className="text-3xl font-bold text-[#1a2947] mt-6 mb-2">
-          $200 Bahamas or Jamaica Giveaway — Official Rules
+          {settings
+            ? `$${settings.prizeValueUsd} Bahamas or Jamaica Giveaway — Official Rules`
+            : 'Bahamas or Jamaica Giveaway — Official Rules'}
         </h1>
         <p className="text-slate-500 mb-10">
           Sky Unlimited Travel Inc.
         </p>
+
+        {loading && (
+          <p className="text-slate-400 text-sm mb-8">Loading current giveaway details…</p>
+        )}
+        {error && (
+          <p className="text-red-500 text-sm mb-8">
+            Couldn't load live giveaway dates/prize amount — showing template
+            text below instead. Refresh to try again.
+          </p>
+        )}
 
         <div className="prose prose-slate max-w-none space-y-6 text-slate-700">
           <p className="font-semibold text-slate-900">
@@ -69,10 +117,16 @@ const GiveawayRules = () => {
               3. Giveaway Period
             </h2>
             <p>
-              Entries will be accepted starting <strong>Aug 10, 2026</strong>{' '}
-              at 12:00 AM ET and ending <strong>Aug 21, 2026</strong> at 11:59
-              PM ET ("Entry Period"). Entries received outside the Entry
-              Period will not be eligible.
+              Entries will be accepted starting{' '}
+              <strong>
+                {settings ? formatDate(settings.start) : '[START DATE]'}
+              </strong>{' '}
+              and ending{' '}
+              <strong>
+                {settings ? formatDate(settings.end) : '[END DATE]'}
+              </strong>{' '}
+              ("Entry Period"). Entries received outside the Entry Period will
+              not be eligible.
             </p>
           </section>
 
@@ -95,7 +149,12 @@ const GiveawayRules = () => {
               5. Prize
             </h2>
             <p>
-              One (1) winner will receive a <strong>$200 credit</strong>{' '}
+              One (1) winner will receive a{' '}
+              <strong>
+                {settings
+                  ? `$${settings.prizeValueUsd} USD ($${settings.prizeValueCad} CAD) credit`
+                  : '[$X credit]'}
+              </strong>{' '}
               ("Prize") toward the purchase of a Sky Unlimited Travel package
               to the Bahamas or Jamaica. The Prize:
             </p>
@@ -119,7 +178,10 @@ const GiveawayRules = () => {
               </li>
             </ul>
             <p className="mt-2">
-              Approximate retail value of the Prize: $200 USD.
+              Approximate retail value of the Prize:{' '}
+              {settings
+                ? `$${settings.prizeValueUsd} USD / $${settings.prizeValueCad} CAD.`
+                : '[$X USD].'}
             </p>
           </section>
 
@@ -236,12 +298,14 @@ const GiveawayRules = () => {
           <hr className="my-8 border-slate-200" />
 
           <p className="text-xs text-slate-400 italic">
-            Fields in brackets [ ] need to be filled in with your specific
-            details before publishing (dates, address, contact email,
-            governing state/province, etc.). This document is a general
-            template and has not been reviewed by an attorney — recommended
-            before running any prize giveaway, particularly one open to
-            Canadian residents.
+            Dates and prize amounts above are pulled live from your giveaway
+            settings (set in the admin page) and update automatically.
+            Remaining fields in brackets [ ] still need to be filled in with
+            your specific details before publishing (address, draw date,
+            claim windows, governing state/province, contact email, etc.).
+            This document is a general template and has not been reviewed by
+            an attorney — recommended before running any prize giveaway,
+            particularly one open to Canadian residents.
           </p>
         </div>
       </div>
