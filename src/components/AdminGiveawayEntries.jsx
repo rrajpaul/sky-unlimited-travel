@@ -20,6 +20,7 @@ const AdminGiveawayEntries = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionId, setActionId] = useState(null);
+  const [emailActionId, setEmailActionId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   // --- Giveaway window + prize settings ---
@@ -181,6 +182,41 @@ const AdminGiveawayEntries = () => {
     }
   };
 
+  const handleSendWinnerEmail = async (entry) => {
+    setEmailActionId(entry.id);
+
+    try {
+      const res = await fetch(
+        apiUrl(`/api/giveaway/${entry.id}/send-winner-email`),
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        window.location.href = '/admin';
+        return;
+      }
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send email');
+      }
+
+      loadEntries();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Failed to send winner email');
+    } finally {
+      setEmailActionId(null);
+    }
+  };
+
   const filteredEntries = entries.filter((entry) => {
     const search = searchTerm.toLowerCase();
 
@@ -194,6 +230,28 @@ const AdminGiveawayEntries = () => {
         .includes(search)
     );
   });
+
+  const WinnerEmailButton = ({ entry }) => {
+    if (!entry.is_winner) return null;
+
+    return (
+      <button
+        onClick={() => handleSendWinnerEmail(entry)}
+        disabled={emailActionId === entry.id}
+        className={`text-xs font-semibold rounded-lg px-3 py-1.5 transition-colors duration-150 disabled:opacity-50 ${
+          entry.winner_email_sent
+            ? 'text-green-700 border border-green-300 hover:bg-green-50'
+            : 'text-indigo-600 border border-indigo-300 hover:bg-indigo-50'
+        }`}
+      >
+        {emailActionId === entry.id
+          ? 'Sending…'
+          : entry.winner_email_sent
+          ? `Resend Email (sent ${new Date(entry.winner_email_sent_at).toLocaleDateString()})`
+          : 'Send Winner Email'}
+      </button>
+    );
+  };
 
   const WinnerToggle = ({ entry }) => (
     <div className="flex items-center gap-3">
@@ -419,6 +477,11 @@ const AdminGiveawayEntries = () => {
                       </div>
                       <WinnerToggle entry={entry} />
                     </div>
+                    {entry.is_winner && (
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <WinnerEmailButton entry={entry} />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -443,6 +506,9 @@ const AdminGiveawayEntries = () => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Winner
                       </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Winner Email
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -465,6 +531,9 @@ const AdminGiveawayEntries = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <WinnerToggle entry={entry} />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <WinnerEmailButton entry={entry} />
                         </td>
                       </tr>
                     ))}

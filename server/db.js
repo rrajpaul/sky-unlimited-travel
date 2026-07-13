@@ -36,6 +36,11 @@ async function initDb() {
     )
   `);
   await pool.query(`
+    ALTER TABLE giveaway_entries
+      ADD COLUMN IF NOT EXISTS winner_email_sent BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS winner_email_sent_at TIMESTAMPTZ
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS giveaway_settings (
       id INTEGER PRIMARY KEY DEFAULT 1,
       start_date TIMESTAMPTZ NOT NULL,

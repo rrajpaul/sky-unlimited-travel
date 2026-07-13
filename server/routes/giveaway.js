@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const requireAdmin = require('../auth/authMiddleware');
+const { sendMail } = require('../utils/mailer');
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // The full set of destinations this feature supports choosing from.
@@ -191,6 +192,82 @@ router.patch('/:id/winner', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('Update winner status error:', err);
     res.status(500).json({ error: 'Failed to update winner status' });
+  }
+});
+
+// POST send the "you won" email to a specific entry (admin only)
+// Requires the entry to already be marked as the winner. Uses the same
+// sendMail util as your inquiries route, and live giveaway settings
+// (prize amount, destination, dates) so the email always matches what's
+// configured, without hardcoding amounts here.
+router.post('/:id/send-winner-email', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const entryResult = await pool.query('SELECT * FROM giveaway_entries WHERE id = $1', [id]);
+    const entry = entryResult.rows[0];
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+    if (!entry.is_winner) {
+      return res.status(400).json({ error: 'This entry is not marked as the winner. Mark them as winner first.' });
+    }
+
+    const settings = await getGiveawaySettings();
+    const destinationLabel = settings?.destinations?.length
+      ? (settings.destinations.length === 1
+          ? settings.destinations[0]
+          : settings.destinations.join(' or '))
+      : entry.destination;
+    const prizeLabel = settings
+      ? `$${settings.prizeValueUsd} USD ($${settings.prizeValueCad} CAD)`
+      : 'your prize';
+
+    await sendMail({
+      to: entry.email,
+      subject: `Congratulations, ${entry.name} — You Won the Sky Unlimited Travel Giveaway! 🎉`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #1a2947; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">You're Our Winner! 🎉</h1>
+          </div>
+          <div style="background-color: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+            <h2 style="color: #1a2947; margin-top: 0;">Hi ${entry.name},</h2>
+            <p style="color: #6b7280;">
+              Congratulations — you've been randomly selected as the winner of the
+              Sky Unlimited Travel giveaway!
+            </p>
+            <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin: 24px 0;">
+              <p style="margin: 4px 0; color: #374151;"><strong>Prize:</strong> ${prizeLabel} credit toward your ${destinationLabel} trip</p>
+            </div>
+            <p style="color: #6b7280;">
+              To claim your prize, please reply to this email or contact us at
+              <a href="mailto:info@skyunlimitedtravel.com">info@skyunlimitedtravel.com</a>
+              within <strong>7 business days</strong>. Your credit must be used
+              toward a booking within <strong>3 months</strong> of this notification.
+            </p>
+            <p style="color: #9ca3af; font-size: 13px;">If you have any questions, just reply to this email — we're happy to help.</p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+              © ${new Date().getFullYear()} Sky Unlimited Travel Inc. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    });
+
+    await pool.query(
+      `UPDATE giveaway_entries
+       SET winner_email_sent = true, winner_email_sent_at = NOW()
+       WHERE id = $1`,
+      [id]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Send winner email error:', err);
+    res.status(500).json({ error: 'Failed to send winner email' });
   }
 });
 
