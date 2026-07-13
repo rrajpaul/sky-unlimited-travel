@@ -142,31 +142,34 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PATCH mark a winner (admin only) — flips winner flag, only one entry should be true at a time
-// PATCH toggle winner status (admin only) — if the entry is already the
-// winner, this clears it (back to "no winner"). Otherwise it clears any
-// other winner first, then marks this entry — only one winner at a time.
-router.patch('/:id/mark-winner', requireAdmin, async (req, res) => {
+// PATCH set winner status explicitly (admin only) — body: { is_winner: true|false }
+// Setting true clears any other winner first, so only one entry is ever
+// the winner at a time. Setting false just clears that entry.
+// (Matches the endpoint your AdminGiveawayEntries.jsx toggle switch calls.)
+router.patch('/:id/winner', requireAdmin, async (req, res) => {
   const { id } = req.params;
+  const { is_winner } = req.body;
+
+  if (typeof is_winner !== 'boolean') {
+    return res.status(400).json({ error: 'is_winner must be true or false.' });
+  }
+
   try {
-    const current = await pool.query(
-      'SELECT is_winner FROM giveaway_entries WHERE id = $1',
-      [id]
-    );
-    if (current.rows.length === 0) {
+    const existing = await pool.query('SELECT id FROM giveaway_entries WHERE id = $1', [id]);
+    if (existing.rows.length === 0) {
       return res.status(404).json({ error: 'Entry not found' });
     }
 
-    if (current.rows[0].is_winner) {
+    if (is_winner) {
+      await pool.query('UPDATE giveaway_entries SET is_winner = false');
+      await pool.query('UPDATE giveaway_entries SET is_winner = true WHERE id = $1', [id]);
+    } else {
       await pool.query('UPDATE giveaway_entries SET is_winner = false WHERE id = $1', [id]);
-      return res.json({ ok: true, isWinner: false });
     }
 
-    await pool.query('UPDATE giveaway_entries SET is_winner = false');
-    await pool.query('UPDATE giveaway_entries SET is_winner = true WHERE id = $1', [id]);
-    res.json({ ok: true, isWinner: true });
+    res.json({ ok: true, is_winner });
   } catch (err) {
-    console.error('Mark winner error:', err);
+    console.error('Update winner status error:', err);
     res.status(500).json({ error: 'Failed to update winner status' });
   }
 });
