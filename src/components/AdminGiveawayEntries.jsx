@@ -183,11 +183,36 @@ const AdminGiveawayEntries = () => {
     );
   });
 
+  const WinnerToggle = ({ entry }) => (
+    <div className="flex items-center gap-3">
+      <button
+        onClick={() => handleToggleWinner(entry)}
+        disabled={actionId === entry.id}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 shrink-0 ${
+          entry.is_winner ? 'bg-green-500' : 'bg-gray-300'
+        } ${actionId === entry.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
+            entry.is_winner ? 'translate-x-6' : 'translate-x-1'
+          }`}
+        />
+      </button>
+      <span
+        className={`text-sm font-semibold ${
+          entry.is_winner ? 'text-green-600' : 'text-gray-500'
+        }`}
+      >
+        {entry.is_winner ? 'Winner' : 'Not Winner'}
+      </span>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
 
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-wrap justify-between items-center gap-3 mb-8">
           <h1 className="text-2xl font-bold text-gray-900">
             Giveaway Entries
           </h1>
@@ -210,7 +235,7 @@ const AdminGiveawayEntries = () => {
         </div>
 
         {/* Giveaway window + prize settings */}
-        <div className="bg-white rounded-lg shadow mb-6 px-6 py-5">
+        <div className="bg-white rounded-lg shadow mb-6 px-4 sm:px-6 py-5">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
             Giveaway Settings
           </h2>
@@ -302,7 +327,7 @@ const AdminGiveawayEntries = () => {
 
         <div className="bg-white rounded-lg shadow overflow-hidden">
 
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
             <input
               type="text"
               placeholder="Search name, email or destination..."
@@ -313,7 +338,7 @@ const AdminGiveawayEntries = () => {
           </div>
 
           {error && (
-            <div className="mx-6 mt-4 bg-red-50 border border-red-200 text-red-700 rounded-md px-4 py-3">
+            <div className="mx-4 sm:mx-6 mt-4 bg-red-50 border border-red-200 text-red-700 rounded-md px-4 py-3">
               {error}
             </div>
           )}
@@ -327,107 +352,92 @@ const AdminGiveawayEntries = () => {
               No giveaway entries found.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              {/* Mobile card layout */}
+              <div className="block sm:hidden divide-y divide-gray-200">
+                {filteredEntries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className={`p-4 ${entry.is_winner ? 'bg-amber-50' : ''}`}
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">
+                          {entry.name}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {entry.email}
+                        </p>
+                      </div>
+                      <p className="text-xs text-gray-400 shrink-0 text-right">
+                        {new Date(entry.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
 
-              <table className="min-w-full divide-y divide-gray-200">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">
+                          Destination
+                        </p>
+                        <p className="text-sm text-gray-800">
+                          {entry.destination || '—'}
+                        </p>
+                      </div>
+                      <WinnerToggle entry={entry} />
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Name
-                    </th>
-
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
-
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Destination
-                    </th>
-
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Entered
-                    </th>
-
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Winner
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="bg-white divide-y divide-gray-200">
-
-                  {filteredEntries.map((entry) => (
-
-                    <tr
-                      key={entry.id}
-                      className={entry.is_winner ? 'bg-amber-50' : ''}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {entry.name}
-                      </td>
-
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {entry.email}
-                      </td>
-
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {entry.destination}
-                      </td>
-
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(entry.created_at).toLocaleString()}
-                      </td>
-
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-
-                          <button
-                            onClick={() => handleToggleWinner(entry)}
-                            disabled={actionId === entry.id}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-                              entry.is_winner
-                                ? 'bg-green-500'
-                                : 'bg-gray-300'
-                            } ${
-                              actionId === entry.id
-                                ? 'opacity-50 cursor-not-allowed'
-                                : ''
-                            }`}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                                entry.is_winner
-                                  ? 'translate-x-6'
-                                  : 'translate-x-1'
-                              }`}
-                            />
-                          </button>
-
-                          <span
-                            className={`text-sm font-semibold ${
-                              entry.is_winner
-                                ? 'text-green-600'
-                                : 'text-gray-500'
-                            }`}
-                          >
-                            {entry.is_winner
-                              ? 'Winner'
-                              : 'Not Winner'}
-                          </span>
-
-                        </div>
-                      </td>
-
+              {/* Desktop table layout */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Destination
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Entered
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Winner
+                      </th>
                     </tr>
-
-                  ))}
-
-                </tbody>
-
-              </table>
-
-            </div>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredEntries.map((entry) => (
+                      <tr
+                        key={entry.id}
+                        className={entry.is_winner ? 'bg-amber-50' : ''}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {entry.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {entry.email}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {entry.destination}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(entry.created_at).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <WinnerToggle entry={entry} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
 
         </div>
