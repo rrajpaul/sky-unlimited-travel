@@ -68,7 +68,7 @@ const GiveawaySection = () => {
           Win $200 off your Bahamas or Jamaica trip
         </h2>
         <p className="text-white/70 mb-8 max-w-xl mx-auto">
-          Enter for a chance to win a $200 credit toward any Sky Unlimited
+          Enter for a chance to win a $150 USD or $200 CAD credit toward any Sky Unlimited
           Travel package to the Bahamas or Jamaica. No purchase necessary —
           just tell us where you'd rather go.
         </p>
