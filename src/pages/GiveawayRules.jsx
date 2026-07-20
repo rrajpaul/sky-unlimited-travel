@@ -108,7 +108,8 @@ const GiveawayRules = () => {
             </h2>
             <p>
               This giveaway ("Giveaway") is sponsored by Sky Unlimited Travel
-              Inc. ("Sponsor"), [ADDRESS TO BE ADDED].
+              Inc. ("Sponsor"), 2500 W International Speedway Suite 900
+              Daytona Beach, FL 32114
             </p>
           </section>
 
@@ -209,7 +210,7 @@ const GiveawayRules = () => {
             <p>
               The winner will be selected at random from all eligible entries
               received during the Entry Period, on or about{' '}
-              <strong>August 1, 2026</strong>. The winner will be notified by
+              <strong>August 15, 2026</strong>. The winner will be notified by
               email within <strong>3 business days</strong> of the drawing.
               The winner must respond within <strong>7 business days</strong> of
               notification to claim the Prize; if unclaimed within that time,
