@@ -160,7 +160,7 @@ const AboutSection = () => {
             >
               <div className="sticky top-24">
                 <img
-                  src="/tasha-photo.png"
+                  src="/tasha-photo.webp"
                   alt="Natasha Renwick, Founder of Sky Unlimited Travel"
                   className="w-full aspect-[4/5] object-cover rounded-2xl shadow-lg"
                 />
