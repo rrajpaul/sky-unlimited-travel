@@ -35,7 +35,7 @@ const ContactSection = () => {
         <img
           className="w-full h-full object-cover"
           alt="Greek coastal village with white buildings"
-          src="https://images.unsplash.com/photo-1533627489758-498ce6c8c1e9"
+          src="/images/contact/contact.webp"
         />
         <div className="absolute inset-0 bg-[#1a2947] bg-opacity-70"></div>
       </div>
