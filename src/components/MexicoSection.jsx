@@ -92,7 +92,7 @@ const MexicoSection = () => {
           delay: 0.2
         }}>
             <div className="relative rounded-2xl overflow-hidden shadow-2xl rotate-2 hover:rotate-0 transition-transform duration-500">
-              <img src="/images/destinations/cancun.jpg" alt="Cancun Beach" className="w-full h-auto" />
+              <img src="/images/destinations/cancun.webp" alt="Cancun Beach" className="w-full h-auto" />
             </div>
           </motion.div>
         </div>

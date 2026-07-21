@@ -27,7 +27,7 @@ const CanadaSection = () => {
             destinationKey="montreal"
             data={{
               ...destinationsData.montreal,
-              image: <img alt="Old Montreal Architecture" src="/images/destinations/montreal.jpg" />
+              image: <img alt="Old Montreal Architecture" src="/images/destinations/montreal.webp" />
             }} 
           />
           <DestinationCard destinationKey="banff" data={destinationsData.banff} />

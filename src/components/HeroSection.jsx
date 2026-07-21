@@ -5,28 +5,17 @@ import BookingProcessModal from '@/components/BookingProcessModal';
 const HeroSection = () => {
   return (
     <section className="relative h-screen flex items-center justify-center overflow-hidden">
-      {/* Video Background */}
+      {/* Image Background */}
       <div className="absolute inset-0 z-0">
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
+        <img 
+          src="/images/hero/hero.webp" 
+          alt="Airplane wing in sky" 
+          fetchpriority="high"
           className="w-full h-full object-cover"
-          poster="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2074&auto=format&fit=crop"
-        >
-          <source src="https://assets.mixkit.co/videos/preview/mixkit-airplane-wing-view-of-the-sky-33230-large.mp4" type="video/mp4" />
-          {/* Fallback image if video fails or on low-power mode */}
-          <img 
-            src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2074&auto=format&fit=crop" 
-            alt="Airplane wing in sky" 
-            className="w-full h-full object-cover"
-          />
-        </video>
+        />
         {/* Overlay */}
         <div className="absolute inset-0 bg-[#1a2947]/40"></div>
       </div>
-      
       <motion.div 
         className="relative z-10 text-center px-4 max-w-4xl mx-auto"
         initial={{ opacity: 0, y: 30 }}
@@ -42,7 +31,6 @@ const HeroSection = () => {
         >
           Let's plan your getaway
         </motion.h1>
-        
         <motion.p 
           className="text-white/90 text-lg md:text-xl mb-10 max-w-2xl mx-auto font-light tracking-wide"
           initial={{ opacity: 0 }}

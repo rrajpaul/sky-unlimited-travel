@@ -26,7 +26,7 @@ const CaribbeanSection = () => {
             destinationKey="antigua"
             data={{
               ...destinationsData.antigua,
-              image: <img alt="Antigua Beaches" src="/images/destinations/antigua.jpg" />
+              image: <img alt="Antigua Beaches" src="/images/destinations/antigua.webp" />
             }} 
           />
           {/* Overriding image for Trinidad with AI generation */}
@@ -34,7 +34,7 @@ const CaribbeanSection = () => {
             destinationKey="trinidad"
             data={{
               ...destinationsData.trinidad,
-              image: <img alt="Trinidad Carnival and Nature" src="/images/destinations/trinidad.jpg" />
+              image: <img alt="Trinidad Carnival and Nature" src="/images/destinations/trinidad.webp" />
             }} 
           />
         </div>
