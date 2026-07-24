@@ -162,6 +162,8 @@ const AboutSection = () => {
                 <img
                   src="/tasha-photo.webp"
                   alt="Natasha Renwick, Founder of Sky Unlimited Travel"
+                  loading="lazy"
+                  decoding="async"
                   className="w-full aspect-[4/5] object-cover rounded-2xl shadow-lg"
                 />
                 <p className="mt-4 text-center font-bold text-[#1a2947]">

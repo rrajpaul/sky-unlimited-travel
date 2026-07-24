@@ -36,6 +36,8 @@ const ContactSection = () => {
           className="w-full h-full object-cover"
           alt="Greek coastal village with white buildings"
           src="/images/contact/contact.webp"
+          loading="lazy"
+          decoding="async"
         />
         <div className="absolute inset-0 bg-[#1a2947] bg-opacity-70"></div>
       </div>
