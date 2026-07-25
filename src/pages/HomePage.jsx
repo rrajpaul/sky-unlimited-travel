@@ -38,7 +38,9 @@ const HomePage = () => {
         <Navbar />
         <main>
           <HeroSection />
-          <GiveawaySection />
+          <div id="giveaway">
+            <GiveawaySection />
+          </div>
           <TravelSearch />
           <div id="destinations">
             <UnitedStatesSection />
