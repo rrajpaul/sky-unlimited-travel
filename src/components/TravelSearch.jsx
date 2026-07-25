@@ -58,10 +58,41 @@ class WidgetErrorBoundary extends Component {
 
 function TravelWidget({ type }) {
   const containerRef = useRef(null);
+  const wrapperRef = useRef(null);
   const [blocked, setBlocked] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(false);
   const { scriptSrc, containerId } = WIDGETS[type];
 
+  // Defer the actual script injection until the widget is near the viewport.
+  // This keeps the ~250kB common.js + ~120kB content script out of the
+  // initial page load for anyone who doesn't scroll down to this section.
   useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    // If IntersectionObserver isn't available for some reason, just load immediately.
+    if (typeof IntersectionObserver === 'undefined') {
+      setShouldLoad(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setShouldLoad(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '300px' } // start loading a bit before it's actually visible
+    );
+
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!shouldLoad) return;
+
     const container = containerRef.current;
     if (!container) return;
 
@@ -82,7 +113,7 @@ function TravelWidget({ type }) {
       // Best-effort cleanup: remove injected content
       container.innerHTML = '';
     };
-  }, [scriptSrc]);
+  }, [shouldLoad, scriptSrc]);
 
   if (blocked) {
     return (
@@ -115,7 +146,19 @@ function TravelWidget({ type }) {
     );
   }
 
-  return <div ref={containerRef} id={containerId} className="w-full min-h-[120px]" />;
+  return (
+    <div ref={wrapperRef} className="w-full min-h-[120px]">
+      {shouldLoad ? (
+        <div ref={containerRef} id={containerId} className="w-full min-h-[120px]" />
+      ) : (
+        // Lightweight placeholder shown until the widget scrolls into view.
+        // Keeps layout stable (no jump) and avoids loading the script early.
+        <div className="w-full min-h-[120px] flex items-center justify-center text-gray-300 text-sm animate-pulse">
+          Loading flight search…
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function TravelSearch() {
