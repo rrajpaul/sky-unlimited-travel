@@ -58,36 +58,44 @@ class WidgetErrorBoundary extends Component {
 
 function TravelWidget({ type }) {
   const containerRef = useRef(null);
-  const wrapperRef = useRef(null);
   const [blocked, setBlocked] = useState(false);
   const [shouldLoad, setShouldLoad] = useState(false);
   const { scriptSrc, containerId } = WIDGETS[type];
 
-  // Defer the actual script injection until the widget is near the viewport.
-  // This keeps the ~250kB common.js + ~120kB content script out of the
-  // initial page load for anyone who doesn't scroll down to this section.
+  // This section sits within the initial viewport on most screens, so
+  // scroll-based (IntersectionObserver) lazy loading doesn't actually delay
+  // anything — it fires on first paint anyway. Instead, defer by PRIORITY:
+  // let the page's own images/fonts/critical JS finish loading first, then
+  // load this ~400kB third-party widget afterward, so it doesn't compete
+  // for bandwidth and main-thread time during the initial render.
   useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
+    let idleHandle;
+    let timeoutHandle;
 
-    // If IntersectionObserver isn't available for some reason, just load immediately.
-    if (typeof IntersectionObserver === 'undefined') {
-      setShouldLoad(true);
-      return;
+    const triggerLoad = () => setShouldLoad(true);
+
+    const scheduleLoad = () => {
+      if ('requestIdleCallback' in window) {
+        // Runs once the browser has spare idle time, with a safety timeout
+        // so it still fires even on a busy page.
+        idleHandle = window.requestIdleCallback(triggerLoad, { timeout: 2000 });
+      } else {
+        // Safari/older browsers: fall back to a short fixed delay.
+        timeoutHandle = setTimeout(triggerLoad, 1500);
+      }
+    };
+
+    if (document.readyState === 'complete') {
+      scheduleLoad();
+    } else {
+      window.addEventListener('load', scheduleLoad, { once: true });
     }
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setShouldLoad(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: '300px' } // start loading a bit before it's actually visible
-    );
-
-    observer.observe(wrapper);
-    return () => observer.disconnect();
+    return () => {
+      window.removeEventListener('load', scheduleLoad);
+      if (idleHandle && 'cancelIdleCallback' in window) window.cancelIdleCallback(idleHandle);
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    };
   }, []);
 
   useEffect(() => {
@@ -147,12 +155,13 @@ function TravelWidget({ type }) {
   }
 
   return (
-    <div ref={wrapperRef} className="w-full min-h-[120px]">
+    <div className="w-full min-h-[120px]">
       {shouldLoad ? (
         <div ref={containerRef} id={containerId} className="w-full min-h-[120px]" />
       ) : (
-        // Lightweight placeholder shown until the widget scrolls into view.
-        // Keeps layout stable (no jump) and avoids loading the script early.
+        // Lightweight placeholder shown until the deferred load kicks in.
+        // Keeps layout stable (no jump) and avoids competing with
+        // critical page resources during initial render.
         <div className="w-full min-h-[120px] flex items-center justify-center text-gray-300 text-sm animate-pulse">
           Loading flight search…
         </div>
