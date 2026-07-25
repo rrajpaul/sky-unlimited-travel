@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet';
 import Navbar from '@/components/Navbar';
 import HeroSection from '@/components/HeroSection';
 import TravelSearch from '@/components/TravelSearch';
+import CarRentalSection from '@/components/CarRentalSection';
 import HowItWorks from '@/components/HowItWorks';
 import UnitedStatesSection from '@/components/UnitedStatesSection';
 import CaribbeanSection from '@/components/CaribbeanSection';
@@ -42,6 +43,7 @@ const HomePage = () => {
             <GiveawaySection />
           </section>
           <TravelSearch />
+          <CarRentalSection />
           <div id="destinations">
             <UnitedStatesSection />
             <CaribbeanSection />
