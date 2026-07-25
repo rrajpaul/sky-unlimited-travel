@@ -2,18 +2,33 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { pool } = require('../db'); // destructured, since db.js exports { pool, initDb }
 
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  const usernameMatch = username === process.env.ADMIN_USERNAME;
-  const passwordMatch = await bcrypt.compare(password, process.env.ADMIN_PASSWORD_HASH);
 
-  if (!usernameMatch || !passwordMatch) {
-    return res.status(401).json({ message: 'Invalid credentials' });
+  try {
+    const result = await pool.query(
+      'SELECT * FROM admins WHERE username = $1',
+      [username]
+    );
+
+    const user = result.rows[0];
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatch) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign({ username: user.username }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    return res.json({ success: true, token });
+  } catch (err) {
+    console.error('Login error:', err);
+    return res.status(500).json({ message: 'Server error' });
   }
-
-  const token = jwt.sign({ username }, process.env.JWT_SECRET, { expiresIn: '7d' });
-  return res.json({ success: true, token });
 });
 
 router.get('/verify', (req, res) => {
