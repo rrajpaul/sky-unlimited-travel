@@ -71,12 +71,35 @@ const ContactSection = () => {
           transition={{ duration: 0.6, delay: 0.3 }}
         >
           <p className="text-white text-sm uppercase tracking-wider mb-4">Call Us Now</p>
-          <a
-            href="tel:1-866-854-8348"
+          
+          <a  href="tel:1-866-854-8348"
             className="text-4xl font-bold text-white hover:text-gray-200 transition-colors duration-300 flex items-center justify-center gap-3"
           >
             <span className="text-5xl">📞</span> 1-866-854-8348
           </a>
+        </motion.div>
+
+        <motion.div
+          className="mb-10 text-white"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.35 }}
+        >
+          <p className="text-sm uppercase tracking-wider mb-3 text-blue-200">Working Hours</p>
+          <div className="inline-block bg-white bg-opacity-10 backdrop-blur-sm rounded-xl px-6 py-4 text-left">
+            <div className="flex justify-between gap-8 text-sm mb-1">
+              <span>Monday – Friday</span>
+              <span className="font-semibold">9:00 AM – 7:00 PM</span>
+            </div>
+            <div className="flex justify-between gap-8 text-sm mb-3">
+              <span>Saturday</span>
+              <span className="font-semibold">10:00 AM – 1:00 PM</span>
+            </div>
+            <div className="border-t border-white border-opacity-20 pt-2 text-xs text-blue-200">
+              Emergencies are followed up within 12 hours.
+            </div>
+          </div>
         </motion.div>
 
         <motion.div
@@ -87,8 +110,8 @@ const ContactSection = () => {
           transition={{ duration: 0.6, delay: 0.4 }}
         >
           <p className="text-lg mb-2">Natasha Renwick</p>
-          <a
-            href="mailto:info@skyunlimitedtravel.com"
+          
+          <a  href="mailto:info@skyunlimitedtravel.com"
             className="text-blue-300 hover:text-blue-200 transition-colors duration-300"
           >
             info@skyunlimitedtravel.com
