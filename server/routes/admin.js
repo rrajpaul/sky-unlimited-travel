@@ -6,7 +6,6 @@ const { pool } = require('../db');
 
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  console.log('LOGIN ATTEMPT:', { username, passwordLength: password?.length });
 
   try {
     const result = await pool.query(
@@ -14,17 +13,12 @@ router.post('/login', async (req, res) => {
       [username]
     );
 
-    console.log('ROWS FOUND:', result.rows.length);
     const user = result.rows[0];
     if (!user) {
-      console.log('NO USER MATCHED FOR USERNAME:', username);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    console.log('STORED HASH:', user.password_hash);
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
-    console.log('PASSWORD MATCH RESULT:', passwordMatch);
-
     if (!passwordMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }

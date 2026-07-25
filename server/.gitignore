@@ -3,3 +3,4 @@ node_modules/
 *.log
 testEmail.cjs
 testEmailGraph.js
+hash.js
