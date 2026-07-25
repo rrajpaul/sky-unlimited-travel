@@ -38,9 +38,9 @@ const HomePage = () => {
         <Navbar />
         <main>
           <HeroSection />
-          <div id="giveaway">
+          <section id="giveaway" className="scroll-mt-24">
             <GiveawaySection />
-          </div>
+          </section>
           <TravelSearch />
           <div id="destinations">
             <UnitedStatesSection />
