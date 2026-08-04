@@ -22,7 +22,7 @@
     "clsx": "^2.1.1",
     "csv-parser": "^3.2.1",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.6.1",
+    "express-rate-limit": "^8.6.2",
     "framer-motion": "^10.16.4",
     "helmet": "^8.3.0",
     "jest": "^30.4.2",
