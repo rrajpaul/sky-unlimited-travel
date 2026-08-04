@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { apiUrl } from '@/lib/api';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import ContactsTable from './ContactsTable';
+import CampaignsTab from './CampaignsTab';
+
+const TABS = [
+  { id: 'inquiries', label: 'Inquiries' },
+  { id: 'crm', label: 'CRM' },
+  { id: 'campaigns', label: 'Campaigns' },
+];
 
 const AdminPage = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -10,6 +18,7 @@ const AdminPage = () => {
   const [error, setError] = useState('');
   const [expandedRows, setExpandedRows] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('inquiries');
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -249,8 +258,8 @@ const AdminPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Travel Registrations</h1>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Admin</h1>
           <div className="flex items-center gap-3">
             <a
               href="/"
@@ -277,6 +286,23 @@ const AdminPage = () => {
           </div>
         </div>
 
+        <div className="flex gap-1 mb-6 border-b border-gray-200">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-200 ${
+                activeTab === t.id
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'inquiries' && (
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
           <input
@@ -517,6 +543,20 @@ const AdminPage = () => {
             </div>
           )}
         </div>
+        )}
+
+        {activeTab === 'crm' && (
+          <div className="bg-white shadow rounded-lg p-6">
+            <ContactsTable />
+          </div>
+        )}
+
+        {activeTab === 'campaigns' && (
+          <div className="bg-white shadow rounded-lg">
+            <CampaignsTab />
+          </div>
+        )}
+
       </div>
     </div>
   );

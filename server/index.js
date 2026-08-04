@@ -6,6 +6,11 @@ const contactRoutes = require('./routes/contact');
 const inquiryRoutes = require('./routes/inquiry');
 const adminRoutes = require('./routes/admin');
 const giveawayRoutes = require('./routes/giveaway');
+const campaignRoutes = require('./routes/campaigns');
+
+// --- CRM additions ---
+const authMiddleware = require('./auth/authMiddleware');
+const crmContactsRoutes = require('./routes/contactsCRM');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -31,6 +36,11 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/inquiry', inquiryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/giveaway', giveawayRoutes);
+app.use('/api/campaigns', campaignRoutes);
+
+// --- CRM additions ---
+// Admin-only: same token your /api/admin routes issue
+app.use('/api/contacts', authMiddleware, crmContactsRoutes);
 
 initDb()
   .then(() => app.listen(PORT, () => console.log(`Server on port ${PORT}`)))

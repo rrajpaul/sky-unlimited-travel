@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { pool } = require('../db');
 const requireAdmin = require('../auth/authMiddleware');
@@ -8,6 +9,42 @@ const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // The full set of destinations this feature supports choosing from.
 // Add new ones here if you expand beyond Bahamas/Jamaica later.
 const ALLOWED_DESTINATIONS = ['Bahamas', 'Jamaica'];
+
+const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY;
+
+// Helper: verify a Turnstile token with Cloudflare's siteverify endpoint.
+// Fails closed — if the secret isn't configured or the request errors out,
+// verification is treated as failed rather than silently allowed through.
+async function verifyTurnstile(token, remoteip) {
+  if (!TURNSTILE_SECRET_KEY) {
+    throw new Error('TURNSTILE_SECRET_KEY is not configured');
+  }
+  if (!token) {
+    return { success: false, 'error-codes': ['missing-input-response'] };
+  }
+
+  const params = new URLSearchParams();
+  params.append('secret', TURNSTILE_SECRET_KEY);
+  params.append('response', token);
+  if (remoteip) params.append('remoteip', remoteip);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: params,
+      signal: controller.signal,
+    });
+    return await res.json(); // { success: boolean, 'error-codes': [...], ... }
+  } catch (err) {
+    console.error('Turnstile verify request failed:', err);
+    return { success: false, 'error-codes': ['internal-error'] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 // Helper: load the current giveaway settings from the DB.
 async function getGiveawaySettings() {
@@ -108,8 +145,18 @@ router.get('/', requireAdmin, async (req, res) => {
   }
 });
 
+const giveawayLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,                   // max submissions per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many entries. Please try again later.'
+  }
+});
+
 // POST new giveaway entry (public — used by the site's entry form)
-router.post('/', async (req, res) => {
+router.post('/', giveawayLimiter, async (req, res) => {
   let settings;
   try {
     settings = await getGiveawaySettings();
@@ -122,13 +169,36 @@ router.post('/', async (req, res) => {
     return res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 
-  const { name, email, destination } = req.body;
+  const { name, email, destination, turnstileToken, website } = req.body;
+
+  // Honeypot: this hidden field should always be empty for real users.
+  // If it's filled in, it's a bot — pretend success so it doesn't learn
+  // its submission was flagged, but don't actually write anything.
+  if (website && website.trim() !== '') {
+    console.warn('Giveaway honeypot triggered', { ip: req.ip });
+    return res.json({ ok: true });
+  }
 
   if (!name?.trim() || !email?.trim()) {
     return res.status(400).json({ error: 'Name and email are required.' });
   }
   if (!emailRe.test(email)) {
     return res.status(400).json({ error: 'Invalid email address.' });
+  }
+
+  if (!turnstileToken) {
+    return res.status(400).json({ error: 'Missing security verification. Please try again.' });
+  }
+
+  try {
+    const verification = await verifyTurnstile(turnstileToken, req.ip);
+    if (!verification.success) {
+      console.warn('Turnstile verification failed:', verification['error-codes']);
+      return res.status(403).json({ error: 'Security verification failed. Please try again.' });
+    }
+  } catch (err) {
+    console.error('Turnstile verification error:', err);
+    return res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 
   // Build the allowed set from live settings: the active destinations, plus
