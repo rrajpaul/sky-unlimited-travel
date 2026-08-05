@@ -10,8 +10,15 @@ const formatDate = (date) =>
 
 const formatDestinationList = (destinations) => {
   if (!destinations || destinations.length === 0) return '';
-  if (destinations.length === 1) return destinations[0];
-  if (destinations.length === 2) return `${destinations[0]} or ${destinations[1]}`;
+
+  if (destinations.length === 1) {
+    return destinations[0];
+  }
+
+  if (destinations.length === 2) {
+    return `${destinations[0]} or ${destinations[1]}`;
+  }
+
   return `${destinations.slice(0, -1).join(', ')}, or ${
     destinations[destinations.length - 1]
   }`;
@@ -77,10 +84,6 @@ const GiveawaySection = () => {
   }, []);
 
 
-  // Render the Turnstile widget once settings are ready. The Cloudflare
-  // script (loaded via <script async defer> in index.html) may not have
-  // finished loading yet when this effect first runs, so we poll briefly
-  // for window.turnstile instead of assuming it's already there.
   useEffect(() => {
     if (!settings) return;
 
@@ -88,7 +91,11 @@ const GiveawaySection = () => {
     let pollInterval = null;
 
     const renderWidget = () => {
-      if (cancelled || !turnstileRef.current || turnstileWidgetId.current !== null) {
+      if (
+        cancelled ||
+        !turnstileRef.current ||
+        turnstileWidgetId.current !== null
+      ) {
         return;
       }
 
@@ -112,6 +119,7 @@ const GiveawaySection = () => {
       );
     };
 
+
     if (window.turnstile) {
       renderWidget();
     } else {
@@ -124,6 +132,7 @@ const GiveawaySection = () => {
       }, 100);
     }
 
+
     return () => {
       cancelled = true;
 
@@ -131,11 +140,15 @@ const GiveawaySection = () => {
         clearInterval(pollInterval);
       }
 
-      if (window.turnstile && turnstileWidgetId.current !== null) {
+      if (
+        window.turnstile &&
+        turnstileWidgetId.current !== null
+      ) {
         window.turnstile.remove(turnstileWidgetId.current);
         turnstileWidgetId.current = null;
       }
     };
+
   }, [settings]);
 
 
@@ -164,7 +177,8 @@ const GiveawaySection = () => {
     : 'active';
 
 
-  const multipleDestinations = settings?.destinations?.length > 1;
+  const multipleDestinations =
+    settings?.destinations?.length > 1;
 
 
   const handleChange = (e) => {
@@ -173,21 +187,17 @@ const GiveawaySection = () => {
       [e.target.name]: e.target.value
     });
   };
-
-
-  const handleSubmit = async (e) => {
+  
+    const handleSubmit = async (e) => {
     e.preventDefault();
-
 
     if (!form.name.trim() || !form.email.trim()) {
       return;
     }
 
-
     if (giveawayStatus !== 'active') {
       return;
     }
-
 
     if (!turnstileToken) {
       setStatus('error');
@@ -197,28 +207,22 @@ const GiveawaySection = () => {
       return;
     }
 
-
     setStatus('submitting');
     setErrorMessage('');
-
 
     try {
       const res = await fetch(apiUrl('/api/giveaway'), {
         method: 'POST',
-
         headers: {
           'Content-Type': 'application/json'
         },
-
         body: JSON.stringify({
           ...form,
           turnstileToken
         })
       });
 
-
       const data = await res.json();
-
 
       if (!res.ok) {
         throw new Error(
@@ -226,11 +230,9 @@ const GiveawaySection = () => {
         );
       }
 
-
       setStatus('success');
 
       resetTurnstile();
-
 
       setForm({
         name: '',
@@ -239,9 +241,7 @@ const GiveawaySection = () => {
         website: ''
       });
 
-
     } catch (err) {
-
       setStatus('error');
 
       setErrorMessage(
@@ -249,9 +249,6 @@ const GiveawaySection = () => {
         'Something went wrong — please try again.'
       );
 
-      // Turnstile tokens are single-use — the server has already spent
-      // this one against siteverify (whether it passed or failed), so
-      // it can't be resubmitted. Reset the widget to get a fresh token.
       resetTurnstile();
     }
   };
@@ -260,10 +257,12 @@ const GiveawaySection = () => {
   if (giveawayStatus === 'loading') {
     return null;
   }
-  
-    const destinationLabel = settings
+
+
+  const destinationLabel = settings
     ? formatDestinationList(settings.destinations)
     : '';
+
 
   return (
     <section
@@ -273,10 +272,52 @@ const GiveawaySection = () => {
     >
       <div className="max-w-3xl mx-auto px-6 text-center">
 
-        {/* Existing giveaway content remains unchanged */}
+        <p className="uppercase tracking-widest text-xs font-semibold text-blue-200/80 mb-3">
+          Limited-time giveaway
+        </p>
+
+        <h2
+          id="giveaway-heading"
+          className="text-3xl md:text-4xl font-bold mb-4"
+        >
+          Win ${settings?.prizeValueUsd || 0} USD
+          {settings?.prizeValueCad && (
+            <> (CA${settings.prizeValueCad} CAD)</>
+          )}
+          {' '}off your next trip
+        </h2>
+
+
+        {settings && (
+          <p className="text-white/80 text-sm mb-4">
+            Giveaway runs from{' '}
+            <strong>
+              {formatDate(settings.start)}
+            </strong>{' '}
+            to{' '}
+            <strong>
+              {formatDate(settings.end)}
+            </strong>
+          </p>
+        )}
+
+
+        <p className="text-white/70 mb-8 max-w-xl mx-auto">
+          Enter for a chance to win a travel credit toward your next
+          Sky Unlimited Travel package
+          {destinationLabel && (
+            <>
+              {' '}to {destinationLabel}
+            </>
+          )}.
+          No purchase necessary — just tell us where you'd rather go.
+        </p>
+
 
         {giveawayStatus === 'active' && (
+
           status === 'success' ? (
+
             <div
               role="status"
               className="bg-white/10 border border-white/20 rounded-xl px-6 py-8 max-w-md mx-auto"
@@ -298,14 +339,12 @@ const GiveawaySection = () => {
             >
 
               <div className="mb-4">
-
                 <label
                   htmlFor="giveaway-name"
                   className="block text-sm font-medium text-slate-700 mb-1"
                 >
                   Full name
                 </label>
-
 
                 <input
                   id="giveaway-name"
@@ -317,9 +356,7 @@ const GiveawaySection = () => {
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
                   placeholder="Jane Smith"
                 />
-
               </div>
-
 
 
               <div className="mb-4">
@@ -330,7 +367,6 @@ const GiveawaySection = () => {
                 >
                   Email address
                 </label>
-
 
                 <input
                   id="giveaway-email"
@@ -344,8 +380,7 @@ const GiveawaySection = () => {
                 />
 
 
-
-                {/* Honeypot field */}
+                {/* Honeypot */}
                 <input
                   id="giveaway-website"
                   name="website"
@@ -361,8 +396,6 @@ const GiveawaySection = () => {
               </div>
 
 
-
-
               {multipleDestinations && (
 
                 <div className="mb-6">
@@ -374,7 +407,6 @@ const GiveawaySection = () => {
                     Which trip are you hoping for?
                   </label>
 
-
                   <select
                     id="giveaway-destination"
                     name="destination"
@@ -384,21 +416,17 @@ const GiveawaySection = () => {
                   >
 
                     {settings.destinations.map((dest) => (
-
                       <option
                         key={dest}
                         value={dest}
                       >
                         {dest}
                       </option>
-
                     ))}
-
 
                     <option value="Either">
                       Either — surprise me
                     </option>
-
 
                   </select>
 
@@ -407,15 +435,10 @@ const GiveawaySection = () => {
               )}
 
 
-
-
-              {/* Cloudflare Turnstile */}
               <div
                 ref={turnstileRef}
                 className="mb-6"
               />
-
-
 
 
               <button
@@ -423,27 +446,31 @@ const GiveawaySection = () => {
                 disabled={status === 'submitting'}
                 className="w-full bg-[#1a2947] text-white font-semibold rounded-lg py-3 hover:bg-[#243a63] transition-colors duration-200 disabled:opacity-60"
               >
-
                 {status === 'submitting'
                   ? 'Entering…'
                   : 'Enter Now'}
-
               </button>
 
 
-
-
               {status === 'error' && (
-
                 <p
                   role="alert"
                   className="text-red-600 text-sm mt-3"
                 >
                   {errorMessage}
                 </p>
-
               )}
 
+
+              <p className="text-xs text-slate-400 mt-4 text-center">
+                No purchase necessary. One entry per person. See{' '}
+                <a
+                  href="/giveaway-rules"
+                  className="underline hover:text-slate-600"
+                >
+                  official rules
+                </a>.
+              </p>
 
             </form>
 
@@ -451,7 +478,6 @@ const GiveawaySection = () => {
         )}
 
       </div>
-
     </section>
   );
 };

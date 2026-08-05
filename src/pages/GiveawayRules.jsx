@@ -32,6 +32,12 @@ const formatDate = (date) =>
     year: 'numeric',
   });
 
+const addDays = (date, days) => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
+
 const GiveawayRules = () => {
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -210,7 +216,10 @@ const GiveawayRules = () => {
             <p>
               The winner will be selected at random from all eligible entries
               received during the Entry Period, on or about{' '}
-              <strong>August 15, 2026</strong>. The winner will be notified by
+            <strong>{settings
+              ? formatDate(addDays(settings.end, 7))
+              : '[DRAW DATE]'}
+           </strong>. The winner will be notified by
               email within <strong>3 business days</strong> of the drawing.
               The winner must respond within <strong>7 business days</strong> of
               notification to claim the Prize; if unclaimed within that time,
