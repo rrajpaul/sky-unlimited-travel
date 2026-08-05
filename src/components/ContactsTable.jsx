@@ -68,6 +68,15 @@ export default function ContactsTable() {
           placeholder="Search name, email, company…"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          type="search"
+          name="contacts-table-search"
+          id="contacts-table-search"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck="false"
+          data-lpignore="true"
+          data-1p-ignore
         />
         <div className="flex gap-2">
           <button onClick={() => setShowImport(true)} className="px-3 py-2 text-sm rounded-md border border-slate-300 text-slate-700">
@@ -146,6 +155,10 @@ export default function ContactsTable() {
                           value={revealPassword}
                           onChange={(e) => setRevealPassword(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && handleReveal(c.id)}
+                          name={`reveal-password-${c.id}`}
+                          autoComplete="off"
+                          data-lpignore="true"
+                          data-1p-ignore
                         />
                         <div className="flex gap-1">
                           <button onClick={() => handleReveal(c.id)} className="text-xs px-2 py-1 rounded bg-slate-900 text-white">
