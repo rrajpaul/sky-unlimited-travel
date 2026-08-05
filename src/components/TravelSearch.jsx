@@ -205,8 +205,15 @@ export default function TravelSearch() {
           </div>
         </div>
 
-        {/* Widget container wrapped in Error Boundary */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden p-4 min-h-[160px]">
+        {/* Widget container wrapped in Error Boundary.
+            NOTE: overflow-visible (not overflow-hidden) is required here —
+            the Aviasales widget renders its date-picker calendar as an
+            absolutely-positioned popup that extends below this container's
+            bounds. overflow-hidden clips that popup; overflow-visible lets
+            it render fully. If the rounded corners ever look wrong because
+            of this, prefer wrapping in a second, non-overflow-affecting
+            rounded div rather than reintroducing overflow-hidden here. */}
+        <div className="bg-white rounded-2xl shadow-xl overflow-visible p-4 min-h-[160px]">
           <WidgetErrorBoundary key={active}>
             {active === 'flights' && <TravelWidget key="flights" type="flights" />}
             {/* {active === 'hotels' && <TravelWidget key="hotels" type="hotels" />} */}
