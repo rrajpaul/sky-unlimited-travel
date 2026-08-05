@@ -284,7 +284,7 @@ const GiveawaySection = () => {
           {settings?.prizeValueCad && (
             <> (CA${settings.prizeValueCad} CAD)</>
           )}
-          {' '}off your next trip
+          {' '}off your {destinationLabel} trip!
         </h2>
 
 
@@ -300,19 +300,6 @@ const GiveawaySection = () => {
             </strong>
           </p>
         )}
-
-
-        <p className="text-white/70 mb-8 max-w-xl mx-auto">
-          Enter for a chance to win a travel credit toward your next
-          Sky Unlimited Travel package
-          {destinationLabel && (
-            <>
-              {' '}to {destinationLabel}
-            </>
-          )}.
-          No purchase necessary — just tell us where you'd rather go.
-        </p>
-
 
         {giveawayStatus === 'active' && (
 
