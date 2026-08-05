@@ -322,10 +322,10 @@ const GiveawaySection = () => {
 
             <form
               onSubmit={handleSubmit}
-              className="bg-white rounded-xl p-6 md:p-8 max-w-md mx-auto text-left shadow-lg"
+              className="bg-white rounded-xl p-5 md:p-6 max-w-md mx-auto text-left shadow-lg"
             >
 
-              <div className="mb-4">
+              <div className="mb-3">
                 <label
                   htmlFor="giveaway-name"
                   className="block text-sm font-medium text-slate-700 mb-1"
@@ -346,7 +346,7 @@ const GiveawaySection = () => {
               </div>
 
 
-              <div className="mb-4">
+              <div className="mb-3">
 
                 <label
                   htmlFor="giveaway-email"
@@ -385,7 +385,7 @@ const GiveawaySection = () => {
 
               {multipleDestinations && (
 
-                <div className="mb-6">
+                <div className="mb-4">
 
                   <label
                     htmlFor="giveaway-destination"
@@ -424,14 +424,14 @@ const GiveawaySection = () => {
 
               <div
                 ref={turnstileRef}
-                className="mb-6"
+                className="mb-4 flex justify-center [&>*]:!scale-90 [&>*]:origin-top"
               />
 
 
               <button
                 type="submit"
                 disabled={status === 'submitting'}
-                className="w-full bg-[#1a2947] text-white font-semibold rounded-lg py-3 hover:bg-[#243a63] transition-colors duration-200 disabled:opacity-60"
+                className="w-full bg-[#1a2947] text-white font-semibold rounded-lg py-2.5 hover:bg-[#243a63] transition-colors duration-200 disabled:opacity-60"
               >
                 {status === 'submitting'
                   ? 'Entering…'
@@ -449,7 +449,7 @@ const GiveawaySection = () => {
               )}
 
 
-              <p className="text-xs text-slate-400 mt-4 text-center">
+              <p className="text-xs text-slate-400 mt-3 text-center">
                 No purchase necessary. One entry per person. See{' '}
                 <a
                   href="/giveaway-rules"
