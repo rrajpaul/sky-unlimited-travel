@@ -267,18 +267,18 @@ const GiveawaySection = () => {
   return (
     <section
       id="giveaway"
-      className="bg-[#1a2947] text-white py-16 md:py-20"
+      className="bg-[#1a2947] text-white pt-8 pb-10 md:pt-12 md:pb-20"
       aria-labelledby="giveaway-heading"
     >
       <div className="max-w-3xl mx-auto px-6 text-center">
 
-        <p className="uppercase tracking-widest text-xs font-semibold text-blue-200/80 mb-3">
+        <p className="uppercase tracking-widest text-xs font-semibold text-blue-200/80 mb-2 md:mb-3">
           Limited-time giveaway
         </p>
 
         <h2
           id="giveaway-heading"
-          className="text-3xl md:text-4xl font-bold mb-4"
+          className="text-2xl md:text-4xl font-bold mb-2 md:mb-4"
         >
           Win ${settings?.prizeValueUsd || 0} USD
           {settings?.prizeValueCad && (
@@ -289,7 +289,7 @@ const GiveawaySection = () => {
 
 
         {settings && (
-          <p className="text-white/80 text-sm mb-4">
+          <p className="text-white/80 text-sm mb-2 md:mb-4">
             Giveaway runs from{' '}
             <strong>
               {formatDate(settings.start)}
