@@ -262,10 +262,16 @@ async function initDb() {
 
   // ---------------------------------------------------------------------
   // Detailed dietary/medical info — one row per contact. Separate from the
-  // simple `dietary_restrictions`/`accessibility_needs` chip tags on
-  // `contacts` (those are quick marketing-form tags like "Vegan"; this is
-  // free-text, more sensitive detail from the client-intake file, so it's
-  // encrypted).
+  // legacy `dietary_restrictions`/`accessibility_needs` chip columns on
+  // `contacts` (those are no longer written to — see contactsCRM.js —
+  // this table is now the single source of truth for dietary/accessibility
+  // data from BOTH the Excel import and the manual contact form, gated
+  // behind reveal-sensitive since it's meaningfully sensitive detail).
+  //
+  // accessibility_needs_enc is kept separate from mobility_assistance_enc
+  // (which is import-only, free text like "WHEELCHAIR") so that manually
+  // editing a contact's accessibility chips can never overwrite detail
+  // that came from an Excel import.
   // ---------------------------------------------------------------------
   await pool.query(`
     CREATE TABLE IF NOT EXISTS dietary_special_needs (
@@ -274,10 +280,17 @@ async function initDb() {
       dietary_restrictions_enc  TEXT,
       food_allergies_enc        TEXT,
       mobility_assistance_enc   TEXT,
+      accessibility_needs_enc   TEXT,
       medical_equipment_enc     TEXT,
       other_notes_enc           TEXT,
       updated_at                TIMESTAMPTZ NOT NULL DEFAULT now()
     )
+  `);
+  // Defensive ALTER for databases where this table already existed before
+  // accessibility_needs_enc was added.
+  await pool.query(`
+    ALTER TABLE dietary_special_needs
+      ADD COLUMN IF NOT EXISTS accessibility_needs_enc TEXT
   `);
   await pool.query(`DROP TRIGGER IF EXISTS trg_dietary_special_needs_updated_at ON dietary_special_needs`);
   await pool.query(`

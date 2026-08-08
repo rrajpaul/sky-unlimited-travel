@@ -56,9 +56,18 @@ export default function ContactForm({ contact, onSave, onCancel }) {
 
         {contact?.legal_full_name && (
           <div className="bg-slate-50 rounded-md px-3 py-2 text-xs text-slate-500">
-            Legal name, passport, and detailed dietary/medical data for this contact came from a
-            client-profile import and aren't editable here. Use the "reveal" option in the table
-            to view sensitive details, or re-import an updated file to change them.
+            Legal name and passport data for this contact came from a client-profile import
+            and aren't editable here. Use the "reveal" option in the table to view them, or
+            re-import an updated file to change them.
+          </div>
+        )}
+
+        {contact?.hasDietaryData && (
+          <div className="bg-amber-50 rounded-md px-3 py-2 text-xs text-amber-700">
+            Dietary/accessibility info below is encrypted and only visible via "reveal" in the
+            table. If you haven't revealed it first, saving this form will overwrite whatever
+            is currently stored with just what's selected below — check "reveal" before
+            editing if you want to see the current values first.
           </div>
         )}
 

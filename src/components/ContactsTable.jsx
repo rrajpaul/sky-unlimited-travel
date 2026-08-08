@@ -128,12 +128,6 @@ export default function ContactsTable() {
                     ))}
                     {c.do_not_email && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs">No email</span>}
                     {c.do_not_phone && <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 text-xs">No call</span>}
-                    {(c.dietary_restrictions || []).map((d) => (
-                      <span key={d} className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 text-xs">{d}</span>
-                    ))}
-                    {(c.accessibility_needs || []).map((a) => (
-                      <span key={a} className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs">{a}</span>
-                    ))}
                   </div>
                 </td>
                 <td className="px-4 py-2">
@@ -151,6 +145,9 @@ export default function ContactsTable() {
                         )}
                         {revealedData[c.id].dietarySpecialNeeds?.mobilityAssistance && (
                           <div>Mobility: {revealedData[c.id].dietarySpecialNeeds.mobilityAssistance}</div>
+                        )}
+                        {(revealedData[c.id].dietarySpecialNeeds?.accessibilityNeeds || []).length > 0 && (
+                          <div>Accessibility: {[].concat(revealedData[c.id].dietarySpecialNeeds.accessibilityNeeds).join(', ')}</div>
                         )}
                         {revealedData[c.id].dietarySpecialNeeds?.medicalEquipment && (
                           <div>Medical equip.: {revealedData[c.id].dietarySpecialNeeds.medicalEquipment}</div>
@@ -197,7 +194,24 @@ export default function ContactsTable() {
                   )}
                 </td>
                 <td className="px-4 py-2 text-right whitespace-nowrap sticky right-0 bg-white">
-                  <button onClick={() => setEditingContact(c)} className="text-slate-500 hover:text-slate-900 mr-3">Edit</button>
+                  <button
+                    onClick={() => {
+                      const revealed = revealedData[c.id]?.dietarySpecialNeeds;
+                      setEditingContact(
+                        revealed
+                          ? {
+                              ...c,
+                              dietary_restrictions: [].concat(revealed.dietaryRestrictions || []).filter(Boolean),
+                              accessibility_needs: [].concat(revealed.accessibilityNeeds || []).filter(Boolean),
+                              special_requirements_notes: revealed.otherNotes || '',
+                            }
+                          : c
+                      );
+                    }}
+                    className="text-slate-500 hover:text-slate-900 mr-3"
+                  >
+                    Edit
+                  </button>
                   <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:text-red-700">Delete</button>
                 </td>
               </tr>
