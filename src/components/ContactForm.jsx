@@ -1,14 +1,17 @@
 import { useState } from 'react';
 
 const EMPTY = {
-  first_name: '', last_name: '', email: '', phone: '', company: '',
+  first_name: '', last_name: '', middle_name: '', legal_full_name: '',
+  email: '', phone: '', company: '',
   address_line1: '', address_line2: '', city: '', region: '', postal_code: '', country: '',
   tags: '', notes: '', do_not_email: false, do_not_phone: false,
-  dietary_restrictions: [], accessibility_needs: [], special_requirements_notes: '',
+  dietary_restrictions: [], accessibility_needs: [], medical_equipment_needs: [],
+  special_requirements_notes: '',
 };
 
 const COMMON_DIETARY = ['Gluten-free', 'Peanut allergy', 'Tree nut allergy', 'Shellfish allergy', 'Dairy-free', 'Vegetarian', 'Vegan', 'Halal', 'Kosher'];
 const COMMON_ACCESSIBILITY = ['Wheelchair access', 'Mobility assistance', 'Visual impairment', 'Hearing impairment', 'Service animal'];
+const COMMON_MEDICAL_EQUIPMENT = ['CPAP machine', 'Oxygen tank', 'Insulin pump', 'Nebulizer', 'Walker', 'Feeding tube', 'Other medical device'];
 
 export default function ContactForm({ contact, onSave, onCancel }) {
   const [form, setForm] = useState(
@@ -54,11 +57,11 @@ export default function ContactForm({ contact, onSave, onCancel }) {
       <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold text-slate-900">{contact ? 'Edit contact' : 'Add contact'}</h2>
 
-        {contact?.legal_full_name && (
+        {contact?.passportPreview && (
           <div className="bg-slate-50 rounded-md px-3 py-2 text-xs text-slate-500">
-            Legal name and passport data for this contact came from a client-profile import
-            and aren't editable here. Use the "reveal" option in the table to view them, or
-            re-import an updated file to change them.
+            Passport data for this contact came from a client-profile import and isn't editable
+            here. Use the "reveal" option in the table to view it, or re-import an updated file
+            to change it.
           </div>
         )}
 
@@ -75,6 +78,20 @@ export default function ContactForm({ contact, onSave, onCancel }) {
           <Field label="First name" value={form.first_name} onChange={update('first_name')} />
           <Field label="Last name" value={form.last_name} onChange={update('last_name')} />
         </div>
+        <Field label="Middle name" value={form.middle_name} onChange={update('middle_name')} />
+        <label className="block text-sm font-medium text-slate-700">
+          Legal full name
+          <input
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            value={form.legal_full_name}
+            onChange={update('legal_full_name')}
+          />
+          <span className="mt-1 block text-xs text-slate-400">
+            Must match a client-profile import exactly to link future re-imports to this
+            contact — changing it may cause a re-import to create a duplicate instead of
+            updating this record.
+          </span>
+        </label>
 
         <Field label="Email" type="email" value={form.email} onChange={update('email')} />
         <div className="grid grid-cols-2 gap-3">
@@ -108,6 +125,13 @@ export default function ContactForm({ contact, onSave, onCancel }) {
           options={COMMON_ACCESSIBILITY}
           selected={form.accessibility_needs}
           onToggle={(opt) => toggleChip('accessibility_needs', opt)()}
+        />
+
+        <ChipPicker
+          label="Medical equipment"
+          options={COMMON_MEDICAL_EQUIPMENT}
+          selected={form.medical_equipment_needs}
+          onToggle={(opt) => toggleChip('medical_equipment_needs', opt)()}
         />
 
         <label className="block text-sm font-medium text-slate-700">

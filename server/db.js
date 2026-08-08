@@ -268,29 +268,32 @@ async function initDb() {
   // data from BOTH the Excel import and the manual contact form, gated
   // behind reveal-sensitive since it's meaningfully sensitive detail).
   //
-  // accessibility_needs_enc is kept separate from mobility_assistance_enc
-  // (which is import-only, free text like "WHEELCHAIR") so that manually
-  // editing a contact's accessibility chips can never overwrite detail
-  // that came from an Excel import.
+  // accessibility_needs_enc / medical_equipment_needs_enc are kept separate
+  // from mobility_assistance_enc / medical_equipment_enc (which are
+  // import-only, free text like "WHEELCHAIR") so that manually editing a
+  // contact's chips can never overwrite detail that came from an Excel
+  // import.
   // ---------------------------------------------------------------------
   await pool.query(`
     CREATE TABLE IF NOT EXISTS dietary_special_needs (
-      id                        SERIAL PRIMARY KEY,
-      contact_id                INTEGER NOT NULL UNIQUE REFERENCES contacts(id) ON DELETE CASCADE,
-      dietary_restrictions_enc  TEXT,
-      food_allergies_enc        TEXT,
-      mobility_assistance_enc   TEXT,
-      accessibility_needs_enc   TEXT,
-      medical_equipment_enc     TEXT,
-      other_notes_enc           TEXT,
-      updated_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+      id                          SERIAL PRIMARY KEY,
+      contact_id                  INTEGER NOT NULL UNIQUE REFERENCES contacts(id) ON DELETE CASCADE,
+      dietary_restrictions_enc    TEXT,
+      food_allergies_enc          TEXT,
+      mobility_assistance_enc     TEXT,
+      accessibility_needs_enc     TEXT,
+      medical_equipment_enc       TEXT,
+      medical_equipment_needs_enc TEXT,
+      other_notes_enc             TEXT,
+      updated_at                  TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
   // Defensive ALTER for databases where this table already existed before
-  // accessibility_needs_enc was added.
+  // these columns were added.
   await pool.query(`
     ALTER TABLE dietary_special_needs
-      ADD COLUMN IF NOT EXISTS accessibility_needs_enc TEXT
+      ADD COLUMN IF NOT EXISTS accessibility_needs_enc TEXT,
+      ADD COLUMN IF NOT EXISTS medical_equipment_needs_enc TEXT
   `);
   await pool.query(`DROP TRIGGER IF EXISTS trg_dietary_special_needs_updated_at ON dietary_special_needs`);
   await pool.query(`

@@ -70,27 +70,30 @@ function parseMaybeChips(value) {
   return value;
 }
 
-// Upserts ONLY the three columns the manual form owns. food_allergies_enc
-// and medical_equipment_enc are never included here, so any values an
-// import previously wrote to this row are left completely untouched.
-async function upsertManualDietaryFields(contactId, { dietaryRestrictions, accessibilityNeeds, specialRequirementsNotes }) {
+// Upserts ONLY the four columns the manual form owns. food_allergies_enc
+// and medical_equipment_enc (import-only) are never included here, so any
+// values an import previously wrote to this row are left completely
+// untouched.
+async function upsertManualDietaryFields(contactId, { dietaryRestrictions, accessibilityNeeds, medicalEquipmentNeeds, specialRequirementsNotes }) {
   const dietaryEnc = encryptField(serializeChips(dietaryRestrictions));
   const accessibilityEnc = encryptField(serializeChips(accessibilityNeeds));
+  const medicalEquipmentNeedsEnc = encryptField(serializeChips(medicalEquipmentNeeds));
   const notesEnc = encryptField(specialRequirementsNotes ? String(specialRequirementsNotes).trim() || null : null);
 
-  const hasAnyData = [dietaryEnc, accessibilityEnc, notesEnc].some((v) => v !== null && v !== undefined);
+  const hasAnyData = [dietaryEnc, accessibilityEnc, medicalEquipmentNeedsEnc, notesEnc].some((v) => v !== null && v !== undefined);
   if (!hasAnyData) return;
 
   await pool.query(
     `
-    INSERT INTO dietary_special_needs (contact_id, dietary_restrictions_enc, accessibility_needs_enc, other_notes_enc)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO dietary_special_needs (contact_id, dietary_restrictions_enc, accessibility_needs_enc, medical_equipment_needs_enc, other_notes_enc)
+    VALUES ($1, $2, $3, $4, $5)
     ON CONFLICT (contact_id) DO UPDATE SET
       dietary_restrictions_enc = EXCLUDED.dietary_restrictions_enc,
       accessibility_needs_enc = EXCLUDED.accessibility_needs_enc,
+      medical_equipment_needs_enc = EXCLUDED.medical_equipment_needs_enc,
       other_notes_enc = EXCLUDED.other_notes_enc
     `,
-    [contactId, dietaryEnc, accessibilityEnc, notesEnc]
+    [contactId, dietaryEnc, accessibilityEnc, medicalEquipmentNeedsEnc, notesEnc]
   );
 }
 
@@ -122,7 +125,7 @@ router.get('/', async (req, res) => {
       LEFT JOIN passport_info p ON p.contact_id = c.id
       LEFT JOIN dietary_special_needs d ON d.contact_id = c.id
       ${whereClause}
-      ORDER BY c.last_name ASC, c.first_name ASC
+      ORDER BY c.legal_full_name ASC NULLS LAST, c.last_name ASC, c.first_name ASC
       LIMIT $${searchParam.length + 1} OFFSET $${searchParam.length + 2}
       `,
       [...searchParam, pageSize, offset]
@@ -201,15 +204,16 @@ router.post('/', async (req, res) => {
     const result = await pool.query(
       `
       INSERT INTO contacts (
-        first_name, last_name, email, phone, company,
+        first_name, last_name, middle_name, legal_full_name, email, phone, company,
         address_line1, address_line2, city, region, postal_code, country,
         tags, notes, do_not_email, do_not_phone,
         source
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'manual')
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'manual')
       RETURNING ${BASIC_COLUMNS}
       `,
       [
-        b.first_name || '', b.last_name || '', b.email || null, b.phone || null, b.company || null,
+        b.first_name || '', b.last_name || '', b.middle_name || null, b.legal_full_name || null,
+        b.email || null, b.phone || null, b.company || null,
         b.address_line1 || null, b.address_line2 || null, b.city || null, b.region || null,
         b.postal_code || null, b.country || null,
         b.tags || [], b.notes || null, !!b.do_not_email, !!b.do_not_phone,
@@ -220,12 +224,16 @@ router.post('/', async (req, res) => {
     await upsertManualDietaryFields(contact.id, {
       dietaryRestrictions: b.dietary_restrictions,
       accessibilityNeeds: b.accessibility_needs,
+      medicalEquipmentNeeds: b.medical_equipment_needs,
       specialRequirementsNotes: b.special_requirements_notes,
     });
 
     res.status(201).json(contact);
   } catch (err) {
     if (err.code === '23505') {
+      if (err.constraint === 'contacts_legal_full_name_unique') {
+        return res.status(409).json({ error: 'A contact with this legal full name already exists' });
+      }
       return res.status(409).json({ error: 'A contact with this email already exists' });
     }
     console.error('POST /contacts error:', err);
@@ -245,14 +253,16 @@ router.put('/:id', async (req, res) => {
     const result = await pool.query(
       `
       UPDATE contacts SET
-        first_name = $1, last_name = $2, email = $3, phone = $4, company = $5,
-        address_line1 = $6, address_line2 = $7, city = $8, region = $9, postal_code = $10, country = $11,
-        tags = $12, notes = $13, do_not_email = $14, do_not_phone = $15
-      WHERE id = $16
+        first_name = $1, last_name = $2, middle_name = $3, legal_full_name = $4,
+        email = $5, phone = $6, company = $7,
+        address_line1 = $8, address_line2 = $9, city = $10, region = $11, postal_code = $12, country = $13,
+        tags = $14, notes = $15, do_not_email = $16, do_not_phone = $17
+      WHERE id = $18
       RETURNING ${BASIC_COLUMNS}
       `,
       [
-        b.first_name || '', b.last_name || '', b.email || null, b.phone || null, b.company || null,
+        b.first_name || '', b.last_name || '', b.middle_name || null, b.legal_full_name || null,
+        b.email || null, b.phone || null, b.company || null,
         b.address_line1 || null, b.address_line2 || null, b.city || null, b.region || null,
         b.postal_code || null, b.country || null,
         b.tags || [], b.notes || null, !!b.do_not_email, !!b.do_not_phone,
@@ -264,18 +274,22 @@ router.put('/:id', async (req, res) => {
     }
 
     // Only touches dietary_restrictions_enc / accessibility_needs_enc /
-    // other_notes_enc — food_allergies_enc and medical_equipment_enc (import
-    // only) are left exactly as they were, whether this contact was
-    // originally imported or not.
+    // medical_equipment_needs_enc / other_notes_enc — food_allergies_enc and
+    // medical_equipment_enc (import only) are left exactly as they were,
+    // whether this contact was originally imported or not.
     await upsertManualDietaryFields(id, {
       dietaryRestrictions: b.dietary_restrictions,
       accessibilityNeeds: b.accessibility_needs,
+      medicalEquipmentNeeds: b.medical_equipment_needs,
       specialRequirementsNotes: b.special_requirements_notes,
     });
 
     res.json(result.rows[0]);
   } catch (err) {
     if (err.code === '23505') {
+      if (err.constraint === 'contacts_legal_full_name_unique') {
+        return res.status(409).json({ error: 'A contact with this legal full name already exists' });
+      }
       return res.status(409).json({ error: 'A contact with this email already exists' });
     }
     console.error('PUT /contacts/:id error:', err);
@@ -345,6 +359,7 @@ router.post('/:id/reveal-sensitive', requireStepUpAuth, async (req, res) => {
         mobilityAssistance: decryptField(d.mobility_assistance_enc),
         accessibilityNeeds: parseMaybeChips(decryptField(d.accessibility_needs_enc)),
         medicalEquipment: decryptField(d.medical_equipment_enc),
+        medicalEquipmentNeeds: parseMaybeChips(decryptField(d.medical_equipment_needs_enc)),
         otherNotes: decryptField(d.other_notes_enc),
       },
     });

@@ -152,6 +152,9 @@ export default function ContactsTable() {
                         {revealedData[c.id].dietarySpecialNeeds?.medicalEquipment && (
                           <div>Medical equip.: {revealedData[c.id].dietarySpecialNeeds.medicalEquipment}</div>
                         )}
+                        {(revealedData[c.id].dietarySpecialNeeds?.medicalEquipmentNeeds || []).length > 0 && (
+                          <div>Medical equip. (added): {[].concat(revealedData[c.id].dietarySpecialNeeds.medicalEquipmentNeeds).join(', ')}</div>
+                        )}
                         {revealedData[c.id].dietarySpecialNeeds?.otherNotes && (
                           <div>Notes: {revealedData[c.id].dietarySpecialNeeds.otherNotes}</div>
                         )}
@@ -203,6 +206,7 @@ export default function ContactsTable() {
                               ...c,
                               dietary_restrictions: [].concat(revealed.dietaryRestrictions || []).filter(Boolean),
                               accessibility_needs: [].concat(revealed.accessibilityNeeds || []).filter(Boolean),
+                              medical_equipment_needs: [].concat(revealed.medicalEquipmentNeeds || []).filter(Boolean),
                               special_requirements_notes: revealed.otherNotes || '',
                             }
                           : c
