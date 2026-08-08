@@ -90,8 +90,8 @@ export default function ContactsTable() {
 
       <p className="text-sm text-slate-500">{total} contacts</p>
 
-      <div className="border border-slate-200 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="border border-slate-200 rounded-lg overflow-x-auto">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
               <th className="px-4 py-2">Name</th>
@@ -196,7 +196,7 @@ export default function ContactsTable() {
                     <span className="text-xs text-slate-300">—</span>
                   )}
                 </td>
-                <td className="px-4 py-2 text-right whitespace-nowrap">
+                <td className="px-4 py-2 text-right whitespace-nowrap sticky right-0 bg-white">
                   <button onClick={() => setEditingContact(c)} className="text-slate-500 hover:text-slate-900 mr-3">Edit</button>
                   <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:text-red-700">Delete</button>
                 </td>
