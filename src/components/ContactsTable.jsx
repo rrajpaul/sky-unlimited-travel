@@ -62,9 +62,9 @@ export default function ContactsTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <input
-          className="w-64 rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="w-full sm:w-64 rounded-md border border-slate-300 px-3 py-2 text-sm"
           placeholder="Search name, email, company…"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -78,7 +78,7 @@ export default function ContactsTable() {
           data-lpignore="true"
           data-1p-ignore
         />
-        <div className="flex gap-2">
+        <div className="flex gap-2 justify-end">
           <button onClick={() => setShowImport(true)} className="px-3 py-2 text-sm rounded-md border border-slate-300 text-slate-700">
             Import CSV/Excel
           </button>
