@@ -4,7 +4,9 @@
 // queries (INSERT ... ON CONFLICT). No ORM, no migration tool involved.
 //
 // DATA-QUALITY NOTES (found via dry-run testing against the real file):
-// - Sheet names: "Address" and "Passport Info".
+// - Sheet names: "Address" and "Dietary & Special Needs" (the "Passport
+//   Info" sheet is intentionally never read — passport data is not stored
+//   anywhere in this app; see db.js for why).
 // - The "Legal Full Name" cell on the Client Index sheet is sometimes
 //   INCOMPLETE even though the separate First/Middle/Last columns are
 //   correct, so the join key is BUILT from those three columns.
@@ -62,16 +64,12 @@ async function importContactsFromWorkbook(buffer) {
 
   const clientIndexRows = sheetToRows(workbook, 'Client Index (A-Z)');
   const addressRows = sheetToRows(workbook, 'Address');
-  const passportRows = sheetToRows(workbook, 'Passport Info');
   const dietaryRows = sheetToRows(workbook, 'Dietary & Special Needs');
   const consentRows = sheetToRows(workbook, 'Consents');
   const emergencyRows = sheetToRows(workbook, 'Emergency Contact');
 
   const addressByName = new Map(
     addressRows.map((r) => [normalizeName(pick(r, 'Legal Full Name')), r])
-  );
-  const passportByName = new Map(
-    passportRows.map((r) => [normalizeName(pick(r, 'Legal Full Name')), r])
   );
   const dietaryByName = new Map(
     dietaryRows.map((r) => [normalizeName(pick(r, 'Legal Full Name')), r])
@@ -90,7 +88,6 @@ async function importContactsFromWorkbook(buffer) {
   let updated = 0;
   const errors = [];
   const usedAddressKeys = new Set();
-  const usedPassportKeys = new Set();
   const usedDietaryKeys = new Set();
 
   for (const row of clientIndexRows) {
@@ -101,13 +98,11 @@ async function importContactsFromWorkbook(buffer) {
 
     try {
       const addressRow = addressByName.get(key) || {};
-      const passportRow = passportByName.get(key) || {};
       const dietaryRow = dietaryByName.get(key) || {};
       const consentRow = consentByName.get(key) || {};
       const emergencyContactRows = emergencyByName.get(key) || [];
 
       if (addressByName.has(key)) usedAddressKeys.add(key);
-      if (passportByName.has(key)) usedPassportKeys.add(key);
       if (dietaryByName.has(key)) usedDietaryKeys.add(key);
 
       const existingResult = await pool.query(
@@ -178,33 +173,6 @@ async function importContactsFromWorkbook(buffer) {
       );
       const contactId = upsertResult.rows[0].id;
 
-      // --- Passport info ---
-      const passportNumberEnc = encryptField(pick(passportRow, 'Passport Number'));
-      const countryOfIssue = pick(passportRow, 'Country of Issue');
-      const issueDate = pick(passportRow, 'Issue Date – MM/DD/YYYY', 'Issue Date');
-      const expirationDate = pick(passportRow, 'Expiration Date- MM/DD/YYYY', 'Expiration Date');
-      const visaRequired = parseBoolean(pick(passportRow, 'Visa Required'));
-      const passportNotes = pick(passportRow, 'Notes');
-      const hasPassportData = [passportNumberEnc, countryOfIssue, issueDate, expirationDate, visaRequired, passportNotes]
-        .some((v) => v !== null && v !== undefined);
-
-      if (hasPassportData) {
-        await pool.query(
-          `
-          INSERT INTO passport_info (contact_id, passport_number_enc, country_of_issue, issue_date, expiration_date, visa_required, notes)
-          VALUES ($1,$2,$3,$4,$5,$6,$7)
-          ON CONFLICT (contact_id) DO UPDATE SET
-            passport_number_enc = EXCLUDED.passport_number_enc,
-            country_of_issue = EXCLUDED.country_of_issue,
-            issue_date = EXCLUDED.issue_date,
-            expiration_date = EXCLUDED.expiration_date,
-            visa_required = EXCLUDED.visa_required,
-            notes = EXCLUDED.notes
-          `,
-          [contactId, passportNumberEnc, countryOfIssue, issueDate, expirationDate, visaRequired, passportNotes]
-        );
-      }
-
       // --- Dietary & special needs (encrypted, detailed) ---
       const dietaryRestrictionsEnc = encryptField(pick(dietaryRow, 'Dietary Restrictions'));
       const foodAllergiesEnc = encryptField(pick(dietaryRow, 'Food Allergies'));
@@ -251,9 +219,6 @@ async function importContactsFromWorkbook(buffer) {
   const unmatchedAddressRows = [...addressByName.keys()]
     .filter((k) => !usedAddressKeys.has(k))
     .map((k) => pick(addressByName.get(k), 'Legal Full Name'));
-  const unmatchedPassportRows = [...passportByName.keys()]
-    .filter((k) => !usedPassportKeys.has(k))
-    .map((k) => pick(passportByName.get(k), 'Legal Full Name'));
   const unmatchedDietaryRows = [...dietaryByName.keys()]
     .filter((k) => !usedDietaryKeys.has(k))
     .map((k) => pick(dietaryByName.get(k), 'Legal Full Name'));
@@ -264,7 +229,6 @@ async function importContactsFromWorkbook(buffer) {
     totalRows: clientIndexRows.length,
     errors,
     unmatchedAddressRows,
-    unmatchedPassportRows,
     unmatchedDietaryRows,
   };
 }

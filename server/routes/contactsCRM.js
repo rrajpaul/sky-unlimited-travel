@@ -2,30 +2,35 @@
 //
 // Mounted in index.js as: app.use('/api/contacts', authMiddleware, crmContactsRoutes);
 // Plain pg queries throughout — no ORM, no migration tool. Every statement
-// here only ever touches `contacts`, `passport_info`, `dietary_special_needs`,
-// and `emergency_contacts` — nothing else in the database.
+// here only ever touches `contacts`, `dietary_special_needs`, and
+// `emergency_contacts` — nothing else in the database.
 //
-// Dietary/accessibility/special-requirements data (whether it came from the
-// Excel import OR was typed into the manual contact form) now lives ONLY in
-// the encrypted `dietary_special_needs` table, gated behind reveal-sensitive.
-// `contacts.dietary_restrictions` / `contacts.accessibility_needs` /
-// `contacts.special_requirements_notes` are no longer read or written here —
-// those plain columns are dead going forward (safe to drop in a later
-// migration once you're confident nothing else reads them).
+// Passport data is intentionally NOT handled here, or anywhere in this app —
+// it isn't imported, stored, decrypted, or displayed. See db.js and
+// importContacts.js for more.
 //
-// The manual form only has three concepts (dietary chips, accessibility
-// chips, a free-text note), which map onto three of the five encrypted
-// columns: dietary_restrictions_enc, accessibility_needs_enc, other_notes_enc.
-// Writes from the manual form deliberately never touch food_allergies_enc or
-// medical_equipment_enc, so editing a contact's chips can never wipe out
-// detail that came from an Excel import — see upsertManualDietaryFields().
+// Dietary/accessibility/medical/special-requirements data (whether it came
+// from the Excel import OR was typed/edited into the manual contact form)
+// lives ONLY in the encrypted `dietary_special_needs` table, gated behind
+// reveal-sensitive. `contacts.dietary_restrictions` / `accessibility_needs` /
+// `special_requirements_notes` are no longer read or written here — those
+// plain columns are dead going forward (safe to drop in a later migration
+// once you're confident nothing else reads them).
+//
+// All seven encrypted columns (dietary_restrictions_enc,
+// accessibility_needs_enc, medical_equipment_needs_enc, food_allergies_enc,
+// mobility_assistance_enc, medical_equipment_enc, other_notes_enc) are
+// editable via the form — see upsertManualDietaryFields(). Editing any one
+// field only overwrites that column; the form always reloads current
+// values on reveal first, so untouched fields round-trip unchanged rather
+// than being blanked out.
 
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const crypto = require('crypto');
 const { pool } = require('../db');
-const { encryptField, decryptField, maskValue } = require('../utils/encryption');
+const { encryptField, decryptField } = require('../utils/encryption');
 const { importContactsFromWorkbook } = require('../utils/importContacts');
 const requireStepUpAuth = require('../middleware/requireStepUpAuth');
 
@@ -70,40 +75,54 @@ function parseMaybeChips(value) {
   return value;
 }
 
-// Upserts ONLY the four columns the manual form owns. food_allergies_enc
-// and medical_equipment_enc (import-only) are never included here, so any
-// values an import previously wrote to this row are left completely
-// untouched.
-async function upsertManualDietaryFields(contactId, { dietaryRestrictions, accessibilityNeeds, medicalEquipmentNeeds, specialRequirementsNotes }) {
+// Upserts all seven encrypted dietary/accessibility/medical columns from
+// whatever the form submitted. Editing any one field only overwrites that
+// column — fields the admin didn't touch keep whatever value was already
+// there (loaded on reveal), so nothing is silently blanked out by editing
+// an unrelated field.
+async function upsertManualDietaryFields(contactId, {
+  dietaryRestrictions, accessibilityNeeds, medicalEquipmentNeeds,
+  foodAllergies, mobilityAssistance, medicalEquipment,
+  specialRequirementsNotes,
+}) {
   const dietaryEnc = encryptField(serializeChips(dietaryRestrictions));
   const accessibilityEnc = encryptField(serializeChips(accessibilityNeeds));
   const medicalEquipmentNeedsEnc = encryptField(serializeChips(medicalEquipmentNeeds));
+  const foodAllergiesEnc = encryptField(foodAllergies ? String(foodAllergies).trim() || null : null);
+  const mobilityAssistanceEnc = encryptField(mobilityAssistance ? String(mobilityAssistance).trim() || null : null);
+  const medicalEquipmentEnc = encryptField(medicalEquipment ? String(medicalEquipment).trim() || null : null);
   const notesEnc = encryptField(specialRequirementsNotes ? String(specialRequirementsNotes).trim() || null : null);
 
-  const hasAnyData = [dietaryEnc, accessibilityEnc, medicalEquipmentNeedsEnc, notesEnc].some((v) => v !== null && v !== undefined);
+  const values = [dietaryEnc, accessibilityEnc, medicalEquipmentNeedsEnc, foodAllergiesEnc, mobilityAssistanceEnc, medicalEquipmentEnc, notesEnc];
+  const hasAnyData = values.some((v) => v !== null && v !== undefined);
   if (!hasAnyData) return;
 
   await pool.query(
     `
-    INSERT INTO dietary_special_needs (contact_id, dietary_restrictions_enc, accessibility_needs_enc, medical_equipment_needs_enc, other_notes_enc)
-    VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO dietary_special_needs (
+      contact_id, dietary_restrictions_enc, accessibility_needs_enc, medical_equipment_needs_enc,
+      food_allergies_enc, mobility_assistance_enc, medical_equipment_enc, other_notes_enc
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     ON CONFLICT (contact_id) DO UPDATE SET
       dietary_restrictions_enc = EXCLUDED.dietary_restrictions_enc,
       accessibility_needs_enc = EXCLUDED.accessibility_needs_enc,
       medical_equipment_needs_enc = EXCLUDED.medical_equipment_needs_enc,
+      food_allergies_enc = EXCLUDED.food_allergies_enc,
+      mobility_assistance_enc = EXCLUDED.mobility_assistance_enc,
+      medical_equipment_enc = EXCLUDED.medical_equipment_enc,
       other_notes_enc = EXCLUDED.other_notes_enc
     `,
-    [contactId, dietaryEnc, accessibilityEnc, medicalEquipmentNeedsEnc, notesEnc]
+    [contactId, ...values]
   );
 }
 
 /**
  * GET /api/contacts?search=&page=&pageSize=
- * Returns { contacts, total }. A masked passport preview is included via a
- * LEFT JOIN, but the full number is never decrypted here. We also LEFT JOIN
- * dietary_special_needs solely to know whether a row exists for this
- * contact (hasDietaryData) — the encrypted fields themselves are never
- * selected or decrypted on the list endpoint, only on reveal-sensitive.
+ * Returns { contacts, total }. We LEFT JOIN dietary_special_needs solely to
+ * know whether a row exists for this contact (hasDietaryData) — the
+ * encrypted fields themselves are never selected or decrypted on the list
+ * endpoint, only on reveal-sensitive.
  */
 router.get('/', async (req, res) => {
   try {
@@ -120,9 +139,8 @@ router.get('/', async (req, res) => {
 
     const listResult = await pool.query(
       `
-      SELECT ${BASIC_COLUMNS_QUALIFIED}, p.passport_number_enc, d.id AS dietary_id
+      SELECT ${BASIC_COLUMNS_QUALIFIED}, d.id AS dietary_id
       FROM contacts c
-      LEFT JOIN passport_info p ON p.contact_id = c.id
       LEFT JOIN dietary_special_needs d ON d.contact_id = c.id
       ${whereClause}
       ORDER BY c.legal_full_name ASC NULLS LAST, c.last_name ASC, c.first_name ASC
@@ -137,14 +155,8 @@ router.get('/', async (req, res) => {
     );
 
     const contacts = listResult.rows.map((row) => {
-      let passportPreview = null;
-      try {
-        passportPreview = maskValue(decryptField(row.passport_number_enc));
-      } catch {
-        passportPreview = null;
-      }
-      const { passport_number_enc, dietary_id, ...rest } = row;
-      return { ...rest, passportPreview, hasDietaryData: dietary_id != null };
+      const { dietary_id, ...rest } = row;
+      return { ...rest, hasDietaryData: dietary_id != null };
     });
 
     res.json({ contacts, total: parseInt(countResult.rows[0].count, 10) });
@@ -174,10 +186,6 @@ router.get('/:id', async (req, res) => {
       `SELECT id, name, relationship, phone, email FROM emergency_contacts WHERE contact_id = $1`,
       [id]
     );
-    const hasPassport = await pool.query(
-      `SELECT id, country_of_issue, visa_required, updated_at FROM passport_info WHERE contact_id = $1`,
-      [id]
-    );
     const hasDietary = await pool.query(
       `SELECT id, updated_at FROM dietary_special_needs WHERE contact_id = $1`,
       [id]
@@ -186,7 +194,6 @@ router.get('/:id', async (req, res) => {
     res.json({
       ...contactResult.rows[0],
       emergency_contacts: emergencyResult.rows,
-      passport_info: hasPassport.rows[0] || null,
       dietary_special_needs: hasDietary.rows[0] || null,
     });
   } catch (err) {
@@ -225,6 +232,9 @@ router.post('/', async (req, res) => {
       dietaryRestrictions: b.dietary_restrictions,
       accessibilityNeeds: b.accessibility_needs,
       medicalEquipmentNeeds: b.medical_equipment_needs,
+      foodAllergies: b.food_allergies,
+      mobilityAssistance: b.mobility_assistance,
+      medicalEquipment: b.medical_equipment,
       specialRequirementsNotes: b.special_requirements_notes,
     });
 
@@ -273,14 +283,17 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Contact not found' });
     }
 
-    // Only touches dietary_restrictions_enc / accessibility_needs_enc /
-    // medical_equipment_needs_enc / other_notes_enc — food_allergies_enc and
-    // medical_equipment_enc (import only) are left exactly as they were,
-    // whether this contact was originally imported or not.
+    // Writes all seven encrypted columns from the form's current state.
+    // The form always reloads the real current values on reveal before
+    // allowing edits, so fields the admin didn't touch round-trip back
+    // unchanged rather than being blanked out.
     await upsertManualDietaryFields(id, {
       dietaryRestrictions: b.dietary_restrictions,
       accessibilityNeeds: b.accessibility_needs,
       medicalEquipmentNeeds: b.medical_equipment_needs,
+      foodAllergies: b.food_allergies,
+      mobilityAssistance: b.mobility_assistance,
+      medicalEquipment: b.medical_equipment,
       specialRequirementsNotes: b.special_requirements_notes,
     });
 
@@ -319,6 +332,8 @@ router.delete('/:id', async (req, res) => {
 /**
  * POST /api/contacts/:id/reveal-sensitive
  * Step-up gated. Body must include { reauthPassword }.
+ * Returns decrypted dietary/accessibility/medical data only — passport is
+ * not stored anywhere in this app.
  */
 router.post('/:id/reveal-sensitive', requireStepUpAuth, async (req, res) => {
   try {
@@ -329,31 +344,18 @@ router.post('/:id/reveal-sensitive', requireStepUpAuth, async (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (Number.isNaN(id)) return res.status(400).json({ error: 'Invalid contact id' });
 
-    const passportResult = await pool.query(
-      `SELECT * FROM passport_info WHERE contact_id = $1`,
-      [id]
-    );
     const dietaryResult = await pool.query(
       `SELECT * FROM dietary_special_needs WHERE contact_id = $1`,
       [id]
     );
 
-    const p = passportResult.rows[0];
     const d = dietaryResult.rows[0];
 
     res.json({
-      passport: p && {
-        passportNumber: decryptField(p.passport_number_enc),
-        countryOfIssue: p.country_of_issue,
-        issueDate: p.issue_date,
-        expirationDate: p.expiration_date,
-        visaRequired: p.visa_required,
-        notes: p.notes,
-      },
       dietarySpecialNeeds: d && {
-        // dietaryRestrictions/accessibilityNeeds may be a JSON array (manual
-        // chips) or a plain string (imported free text) — parseMaybeChips
-        // returns whichever shape it actually is.
+        // dietaryRestrictions/accessibilityNeeds/medicalEquipmentNeeds may be
+        // a JSON array (manual chips) or a plain string (imported free text)
+        // — parseMaybeChips returns whichever shape it actually is.
         dietaryRestrictions: parseMaybeChips(decryptField(d.dietary_restrictions_enc)),
         foodAllergies: decryptField(d.food_allergies_enc),
         mobilityAssistance: decryptField(d.mobility_assistance_enc),

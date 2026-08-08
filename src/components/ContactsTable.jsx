@@ -131,12 +131,9 @@ export default function ContactsTable() {
                   </div>
                 </td>
                 <td className="px-4 py-2">
-                  {(c.passportPreview || c.hasDietaryData) ? (
+                  {c.hasDietaryData ? (
                     revealedData[c.id] ? (
                       <div className="text-xs text-slate-700 space-y-0.5">
-                        {revealedData[c.id].passport?.passportNumber && (
-                          <div>Passport: {revealedData[c.id].passport.passportNumber}</div>
-                        )}
                         {revealedData[c.id].dietarySpecialNeeds?.dietaryRestrictions && (
                           <div>Dietary: {revealedData[c.id].dietarySpecialNeeds.dietaryRestrictions}</div>
                         )}
@@ -189,7 +186,7 @@ export default function ContactsTable() {
                         onClick={() => { setRevealFor(c.id); setRevealPassword(''); setRevealError(null); }}
                         className="text-xs text-slate-500 hover:text-slate-900 underline"
                       >
-                        {c.passportPreview || 'Sensitive info'} — reveal
+                        Sensitive info — reveal
                       </button>
                     )
                   ) : (
@@ -197,25 +194,7 @@ export default function ContactsTable() {
                   )}
                 </td>
                 <td className="px-4 py-2 text-right whitespace-nowrap sticky right-0 bg-white">
-                  <button
-                    onClick={() => {
-                      const revealed = revealedData[c.id]?.dietarySpecialNeeds;
-                      setEditingContact(
-                        revealed
-                          ? {
-                              ...c,
-                              dietary_restrictions: [].concat(revealed.dietaryRestrictions || []).filter(Boolean),
-                              accessibility_needs: [].concat(revealed.accessibilityNeeds || []).filter(Boolean),
-                              medical_equipment_needs: [].concat(revealed.medicalEquipmentNeeds || []).filter(Boolean),
-                              special_requirements_notes: revealed.otherNotes || '',
-                            }
-                          : c
-                      );
-                    }}
-                    className="text-slate-500 hover:text-slate-900 mr-3"
-                  >
-                    Edit
-                  </button>
+                  <button onClick={() => setEditingContact(c)} className="text-slate-500 hover:text-slate-900 mr-3">Edit</button>
                   <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:text-red-700">Delete</button>
                 </td>
               </tr>

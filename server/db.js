@@ -236,29 +236,14 @@ async function initDb() {
   `);
 
   // ---------------------------------------------------------------------
-  // Passport info — one row per contact. Passport number is encrypted
-  // (AES-256-GCM, see server/utils/encryption.js); everything else here is
-  // low-sensitivity metadata, left plain.
+  // NOTE: Passport info is intentionally NOT stored anywhere in this
+  // database. It was previously kept in a `passport_info` table
+  // (encrypted passport number + metadata), but was removed as too
+  // sensitive to have accessible from this app at all — even encrypted
+  // and behind step-up auth. That table was dropped manually; nothing
+  // here recreates it. The Excel import no longer reads or writes it
+  // either — see importContacts.js.
   // ---------------------------------------------------------------------
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS passport_info (
-      id                   SERIAL PRIMARY KEY,
-      contact_id           INTEGER NOT NULL UNIQUE REFERENCES contacts(id) ON DELETE CASCADE,
-      passport_number_enc  TEXT,
-      country_of_issue     TEXT,
-      issue_date           TEXT,
-      expiration_date      TEXT,
-      visa_required        BOOLEAN,
-      notes                TEXT,
-      updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
-  await pool.query(`DROP TRIGGER IF EXISTS trg_passport_info_updated_at ON passport_info`);
-  await pool.query(`
-    CREATE TRIGGER trg_passport_info_updated_at
-    BEFORE UPDATE ON passport_info
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at()
-  `);
 
   // ---------------------------------------------------------------------
   // Detailed dietary/medical info — one row per contact. Separate from the
@@ -268,11 +253,12 @@ async function initDb() {
   // data from BOTH the Excel import and the manual contact form, gated
   // behind reveal-sensitive since it's meaningfully sensitive detail).
   //
-  // accessibility_needs_enc / medical_equipment_needs_enc are kept separate
-  // from mobility_assistance_enc / medical_equipment_enc (which are
-  // import-only, free text like "WHEELCHAIR") so that manually editing a
-  // contact's chips can never overwrite detail that came from an Excel
-  // import.
+  // All seven columns below are editable via the admin form once revealed
+  // — there's no import-only/manual-only split anymore. accessibility_
+  // needs_enc and medical_equipment_needs_enc exist alongside mobility_
+  // assistance_enc and medical_equipment_enc as separate free-text fields
+  // (not a schema restriction, just how the form's chip UI vs. free-text
+  // UI happen to be laid out) — see ContactForm.jsx.
   // ---------------------------------------------------------------------
   await pool.query(`
     CREATE TABLE IF NOT EXISTS dietary_special_needs (
