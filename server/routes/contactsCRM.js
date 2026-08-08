@@ -36,7 +36,10 @@ const BASIC_COLUMNS_QUALIFIED = BASIC_COLUMNS
 /**
  * GET /api/contacts?search=&page=&pageSize=
  * Returns { contacts, total }. A masked passport preview is included via a
- * LEFT JOIN, but the full number is never decrypted here.
+ * LEFT JOIN, but the full number is never decrypted here. We also LEFT JOIN
+ * dietary_special_needs solely to know whether a row exists for this
+ * contact (hasDietaryData) — the encrypted fields themselves are never
+ * selected or decrypted on the list endpoint, only on reveal-sensitive.
  */
 router.get('/', async (req, res) => {
   try {
@@ -53,9 +56,10 @@ router.get('/', async (req, res) => {
 
     const listResult = await pool.query(
       `
-      SELECT ${BASIC_COLUMNS_QUALIFIED}, p.passport_number_enc
+      SELECT ${BASIC_COLUMNS_QUALIFIED}, p.passport_number_enc, d.id AS dietary_id
       FROM contacts c
       LEFT JOIN passport_info p ON p.contact_id = c.id
+      LEFT JOIN dietary_special_needs d ON d.contact_id = c.id
       ${whereClause}
       ORDER BY c.last_name ASC, c.first_name ASC
       LIMIT $${searchParam.length + 1} OFFSET $${searchParam.length + 2}
@@ -75,8 +79,8 @@ router.get('/', async (req, res) => {
       } catch {
         passportPreview = null;
       }
-      const { passport_number_enc, ...rest } = row;
-      return { ...rest, passportPreview };
+      const { passport_number_enc, dietary_id, ...rest } = row;
+      return { ...rest, passportPreview, hasDietaryData: dietary_id != null };
     });
 
     res.json({ contacts, total: parseInt(countResult.rows[0].count, 10) });

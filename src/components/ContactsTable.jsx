@@ -137,12 +137,26 @@ export default function ContactsTable() {
                   </div>
                 </td>
                 <td className="px-4 py-2">
-                  {c.passportPreview ? (
+                  {(c.passportPreview || c.hasDietaryData) ? (
                     revealedData[c.id] ? (
                       <div className="text-xs text-slate-700 space-y-0.5">
-                        <div>Passport: {revealedData[c.id].passport?.passportNumber || '—'}</div>
+                        {revealedData[c.id].passport?.passportNumber && (
+                          <div>Passport: {revealedData[c.id].passport.passportNumber}</div>
+                        )}
                         {revealedData[c.id].dietarySpecialNeeds?.dietaryRestrictions && (
                           <div>Dietary: {revealedData[c.id].dietarySpecialNeeds.dietaryRestrictions}</div>
+                        )}
+                        {revealedData[c.id].dietarySpecialNeeds?.foodAllergies && (
+                          <div>Allergies: {revealedData[c.id].dietarySpecialNeeds.foodAllergies}</div>
+                        )}
+                        {revealedData[c.id].dietarySpecialNeeds?.mobilityAssistance && (
+                          <div>Mobility: {revealedData[c.id].dietarySpecialNeeds.mobilityAssistance}</div>
+                        )}
+                        {revealedData[c.id].dietarySpecialNeeds?.medicalEquipment && (
+                          <div>Medical equip.: {revealedData[c.id].dietarySpecialNeeds.medicalEquipment}</div>
+                        )}
+                        {revealedData[c.id].dietarySpecialNeeds?.otherNotes && (
+                          <div>Notes: {revealedData[c.id].dietarySpecialNeeds.otherNotes}</div>
                         )}
                       </div>
                     ) : revealFor === c.id ? (
@@ -175,7 +189,7 @@ export default function ContactsTable() {
                         onClick={() => { setRevealFor(c.id); setRevealPassword(''); setRevealError(null); }}
                         className="text-xs text-slate-500 hover:text-slate-900 underline"
                       >
-                        {c.passportPreview} — reveal
+                        {c.passportPreview || 'Sensitive info'} — reveal
                       </button>
                     )
                   ) : (
