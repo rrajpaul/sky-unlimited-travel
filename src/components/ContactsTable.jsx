@@ -62,7 +62,7 @@ export default function ContactsTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:sticky md:top-0 md:z-30 md:bg-white md:py-3 md:border-b md:border-slate-100">
         <input
           className="w-full sm:w-64 rounded-md border border-slate-300 px-3 py-2 text-sm"
           placeholder="Search name, email, company…"

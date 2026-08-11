@@ -224,6 +224,17 @@ async function initDb() {
       ADD COLUMN IF NOT EXISTS consent_date_signed       TIMESTAMPTZ
   `);
 
+  // Date of birth — sensitive PII, stored encrypted at rest and gated
+  // behind reveal-sensitive in the app, matching the pattern used for
+  // dietary_special_needs (see below) rather than the plaintext columns
+  // above. Encryption/decryption happens in the application layer
+  // (contactsCRM.js), same as the dietary/medical *_enc columns; this
+  // column only ever holds ciphertext, never plaintext.
+  await pool.query(`
+    ALTER TABLE contacts
+      ADD COLUMN IF NOT EXISTS dob_enc TEXT
+  `);
+
   await pool.query(`
     DO $$
     BEGIN
