@@ -266,6 +266,7 @@ export default function ContactsTable() {
       <button
         onClick={() => setEditingContact({})}
         aria-label="Add contact"
+        title="+ Add contact"
         className="md:hidden fixed bottom-5 right-5 z-40 w-14 h-14 rounded-full bg-slate-900 text-white text-2xl leading-none shadow-lg shadow-slate-900/30 flex items-center justify-center active:scale-95 transition-transform"
       >
         +
