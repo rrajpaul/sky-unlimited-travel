@@ -90,7 +90,34 @@ export default function ContactsTable() {
 
       <p className="text-sm text-slate-500">{total} contacts</p>
 
-      <div className="border border-slate-200 rounded-lg overflow-x-auto">
+      {/* Mobile: stacked cards (legal full name / email / actions) */}
+      <div className="md:hidden border border-slate-200 rounded-lg divide-y divide-slate-100">
+        {loading && (
+          <div className="px-4 py-6 text-center text-slate-400 text-sm">Loading…</div>
+        )}
+        {!loading && contacts.length === 0 && (
+          <div className="px-4 py-6 text-center text-slate-400 text-sm">No contacts yet.</div>
+        )}
+        {contacts.map((c) => (
+          <div key={c.id} className="px-4 py-3 space-y-1">
+            <div className="font-medium text-slate-900">
+              {c.legal_full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim()}
+            </div>
+            <div className="text-sm text-slate-600">{c.email}</div>
+            <div className="flex gap-4 pt-1">
+              <button onClick={() => setEditingContact(c)} className="text-sm text-slate-500 hover:text-slate-900">
+                Edit
+              </button>
+              <button onClick={() => handleDelete(c.id)} className="text-sm text-red-500 hover:text-red-700">
+                Delete
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop / tablet: full data table */}
+      <div className="hidden md:block border border-slate-200 rounded-lg overflow-x-auto">
         <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
