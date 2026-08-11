@@ -82,7 +82,7 @@ export default function ContactsTable() {
           <button onClick={() => setShowImport(true)} className="px-3 py-2 text-sm rounded-md border border-slate-300 text-slate-700">
             Import CSV/Excel
           </button>
-          <button onClick={() => setEditingContact({})} className="px-3 py-2 text-sm rounded-md bg-slate-900 text-white">
+          <button onClick={() => setEditingContact({})} className="hidden md:inline-flex px-3 py-2 text-sm rounded-md bg-slate-900 text-white">
             + Add contact
           </button>
         </div>
@@ -261,6 +261,15 @@ export default function ContactsTable() {
       {showImport && (
         <ImportContactsModal onClose={() => setShowImport(false)} onImported={load} />
       )}
+
+      {/* Mobile: floating "add contact" button */}
+      <button
+        onClick={() => setEditingContact({})}
+        aria-label="Add contact"
+        className="md:hidden fixed bottom-5 right-5 z-40 w-14 h-14 rounded-full bg-slate-900 text-white text-2xl leading-none shadow-lg shadow-slate-900/30 flex items-center justify-center active:scale-95 transition-transform"
+      >
+        +
+      </button>
     </div>
   );
 }
