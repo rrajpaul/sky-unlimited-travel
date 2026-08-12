@@ -262,12 +262,13 @@ export default function ContactsTable() {
         <ImportContactsModal onClose={() => setShowImport(false)} onImported={load} />
       )}
 
-      {/* Mobile: floating "add contact" button */}
+      {/* Mobile: floating "add contact" button — sits above the pagination
+          row when one is showing, so it doesn't cover Previous/Next. */}
       <button
         onClick={() => setEditingContact({})}
         aria-label="Add contact"
         title="+ Add contact"
-        className="md:hidden fixed bottom-5 right-5 z-40 w-14 h-14 rounded-full bg-slate-900 text-white text-2xl leading-none shadow-lg shadow-slate-900/30 flex items-center justify-center active:scale-95 transition-transform"
+        className={`md:hidden fixed right-5 z-40 w-14 h-14 rounded-full bg-slate-900 text-white text-2xl leading-none shadow-lg shadow-slate-900/30 flex items-center justify-center active:scale-95 transition-transform ${totalPages > 1 ? 'bottom-20' : 'bottom-5'}`}
       >
         +
       </button>
