@@ -4,20 +4,33 @@ import { contactsApi } from '../api/crmApi';
 const EMPTY = {
   first_name: '', last_name: '', middle_name: '', legal_full_name: '',
   email: '', phone: '', company: '',
+  client_status: '',
   address_line1: '', address_line2: '', city: '', region: '', postal_code: '', country: '',
   tags: '', notes: '', do_not_email: false, do_not_phone: false,
-  dietary_restrictions: [], accessibility_needs: [], medical_equipment_needs: [],
-  food_allergies: '', mobility_assistance: '', medical_equipment: '',
+  dob: '',
+  dietary_restrictions: [], accessibility_needs: [],
+  food_allergies: '', mobility_assistance: [], medical_equipment: [],
   special_requirements_notes: '',
 };
 
+// value = what's actually stored (matches db.js's documented values and
+// what the Excel import writes); label = what's shown in the dropdown.
+const CLIENT_STATUS_OPTIONS = [
+  { value: 'VIP', label: 'VIP' },
+  { value: 'CLIENT', label: 'Client' },
+  { value: 'FAMILY', label: 'Family' },
+  { value: 'REFERRAL', label: 'Referral' },
+  { value: 'FRIEND', label: 'Friend' },
+];
+
 const COMMON_DIETARY = ['Gluten-free', 'Peanut allergy', 'Tree nut allergy', 'Shellfish allergy', 'Dairy-free', 'Vegetarian', 'Vegan', 'Halal', 'Kosher'];
 const COMMON_ACCESSIBILITY = ['Wheelchair access', 'Mobility assistance', 'Visual impairment', 'Hearing impairment', 'Service animal'];
+const COMMON_MOBILITY_ASSISTANCE = ['Wheelchair', 'Walker', 'Cane', 'Mobility scooter', 'Transfer assistance', 'Aisle seat required', 'Ground-floor room required'];
 const COMMON_MEDICAL_EQUIPMENT = ['CPAP machine', 'Oxygen tank', 'Insulin pump', 'Nebulizer', 'Walker', 'Feeding tube', 'Other medical device'];
 
 export default function ContactForm({ contact, onSave, onCancel }) {
   const isNewContact = !contact?.id;
-  const hasSensitiveData = !!contact?.hasDietaryData;
+  const hasSensitiveData = !!contact?.hasDietaryData || !!contact?.hasDob;
 
   const [form, setForm] = useState(
     contact
@@ -27,11 +40,11 @@ export default function ContactForm({ contact, onSave, onCancel }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  // Sensitive section (dietary/accessibility/medical) only stays locked
-  // behind a password re-check when this contact actually HAS something
-  // stored there — no point gating an empty section. There's nothing to
-  // protect on a brand-new contact either, so both skip straight to
-  // editable. Passport data is not stored anywhere in this app.
+  // Sensitive section (DOB, dietary/accessibility/medical) only stays
+  // locked behind a password re-check when this contact actually HAS
+  // something stored there — no point gating an empty section. There's
+  // nothing to protect on a brand-new contact either, so both skip
+  // straight to editable. Passport data is not stored anywhere in this app.
   const [revealed, setRevealed] = useState(isNewContact || !hasSensitiveData);
   const [revealing, setRevealing] = useState(false);
   const [revealPassword, setRevealPassword] = useState('');
@@ -59,12 +72,12 @@ export default function ContactForm({ contact, onSave, onCancel }) {
       const d = data.dietarySpecialNeeds;
       setForm((f) => ({
         ...f,
+        dob: data.dob || '',
         dietary_restrictions: [].concat(d?.dietaryRestrictions || []).filter(Boolean),
         accessibility_needs: [].concat(d?.accessibilityNeeds || []).filter(Boolean),
-        medical_equipment_needs: [].concat(d?.medicalEquipmentNeeds || []).filter(Boolean),
         food_allergies: d?.foodAllergies || '',
-        mobility_assistance: d?.mobilityAssistance || '',
-        medical_equipment: d?.medicalEquipment || '',
+        mobility_assistance: [].concat(d?.mobilityAssistance || []).filter(Boolean),
+        medical_equipment: [].concat(d?.medicalEquipment || []).filter(Boolean),
         special_requirements_notes: d?.otherNotes || '',
       }));
       setRevealed(true);
@@ -126,6 +139,20 @@ export default function ContactForm({ contact, onSave, onCancel }) {
           <Field label="Company" value={form.company} onChange={update('company')} />
         </div>
 
+        <label className="block text-sm font-medium text-slate-700">
+          Status
+          <select
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
+            value={form.client_status || ''}
+            onChange={update('client_status')}
+          >
+            <option value="">—</option>
+            {CLIENT_STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </label>
+
         <Field label="Address line 1" value={form.address_line1} onChange={update('address_line1')} />
         <Field label="Address line 2 (apt, unit)" value={form.address_line2} onChange={update('address_line2')} />
         <div className="grid grid-cols-2 gap-3">
@@ -167,8 +194,8 @@ export default function ContactForm({ contact, onSave, onCancel }) {
           {!revealed ? (
             <div className="bg-slate-50 rounded-md p-3">
               <p className="text-xs text-slate-500 mb-2">
-                Dietary, accessibility, and medical details are encrypted. Enter your
-                password to view and edit them for this contact.
+                Date of birth, dietary, accessibility, and medical details are encrypted.
+                Enter your password to view and edit them for this contact.
               </p>
               {!revealing ? (
                 <button
@@ -216,6 +243,13 @@ export default function ContactForm({ contact, onSave, onCancel }) {
             </div>
           ) : (
             <div className="space-y-4">
+              <Field
+                label="Date of birth"
+                type="date"
+                value={form.dob}
+                onChange={update('dob')}
+              />
+
               <ChipPicker
                 label="Dietary restrictions / allergies"
                 options={COMMON_DIETARY}
@@ -239,26 +273,22 @@ export default function ContactForm({ contact, onSave, onCancel }) {
                 extra={form.accessibility_needs.filter((v) => !COMMON_ACCESSIBILITY.includes(v))}
                 onRemoveExtra={(val) => toggleChip('accessibility_needs', val)()}
               />
-              <Field
-                label="Mobility assistance (free text, e.g. from import)"
-                value={form.mobility_assistance}
-                onChange={update('mobility_assistance')}
-                placeholder="e.g. WHEELCHAIR"
+              <ChipPicker
+                label="Mobility assistance"
+                options={COMMON_MOBILITY_ASSISTANCE}
+                selected={form.mobility_assistance}
+                onToggle={(opt) => toggleChip('mobility_assistance', opt)()}
+                extra={form.mobility_assistance.filter((v) => !COMMON_MOBILITY_ASSISTANCE.includes(v))}
+                onRemoveExtra={(val) => toggleChip('mobility_assistance', val)()}
               />
 
               <ChipPicker
                 label="Medical equipment"
                 options={COMMON_MEDICAL_EQUIPMENT}
-                selected={form.medical_equipment_needs}
-                onToggle={(opt) => toggleChip('medical_equipment_needs', opt)()}
-                extra={form.medical_equipment_needs.filter((v) => !COMMON_MEDICAL_EQUIPMENT.includes(v))}
-                onRemoveExtra={(val) => toggleChip('medical_equipment_needs', val)()}
-              />
-              <Field
-                label="Medical equipment (free text, e.g. from import)"
-                value={form.medical_equipment}
-                onChange={update('medical_equipment')}
-                placeholder="e.g. CPAP machine, own oxygen tank"
+                selected={form.medical_equipment}
+                onToggle={(opt) => toggleChip('medical_equipment', opt)()}
+                extra={form.medical_equipment.filter((v) => !COMMON_MEDICAL_EQUIPMENT.includes(v))}
+                onRemoveExtra={(val) => toggleChip('medical_equipment', val)()}
               />
 
               <label className="block text-sm font-medium text-slate-700">

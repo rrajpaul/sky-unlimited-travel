@@ -34,7 +34,8 @@ export const contactsApi = {
     return request('/contacts/import', { method: 'POST', body: formData });
   },
   // Step-up gated: requires the admin's current password to decrypt and
-  // return passport / detailed dietary-medical data for one contact.
+  // return date of birth and detailed dietary/medical data for one
+  // contact. Passport data is not stored anywhere in this app.
   revealSensitive: (id, reauthPassword) =>
     request(`/contacts/${id}/reveal-sensitive`, {
       method: 'POST',

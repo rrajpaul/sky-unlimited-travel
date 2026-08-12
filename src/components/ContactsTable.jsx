@@ -15,7 +15,7 @@ export default function ContactsTable() {
   const [revealFor, setRevealFor] = useState(null); // contact id currently prompting for password
   const [revealPassword, setRevealPassword] = useState('');
   const [revealError, setRevealError] = useState(null);
-  const [revealedData, setRevealedData] = useState({}); // { [contactId]: { passport, dietarySpecialNeeds } }
+  const [revealedData, setRevealedData] = useState({}); // { [contactId]: { passport, dob, dietarySpecialNeeds } }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -158,26 +158,26 @@ export default function ContactsTable() {
                   </div>
                 </td>
                 <td className="px-4 py-2">
-                  {c.hasDietaryData ? (
+                  {(c.hasDietaryData || c.hasDob) ? (
                     revealedData[c.id] ? (
                       <div className="text-xs text-slate-700 space-y-0.5">
+                        {revealedData[c.id].dob && (
+                          <div>DOB: {revealedData[c.id].dob}</div>
+                        )}
                         {revealedData[c.id].dietarySpecialNeeds?.dietaryRestrictions && (
                           <div>Dietary: {revealedData[c.id].dietarySpecialNeeds.dietaryRestrictions}</div>
                         )}
                         {revealedData[c.id].dietarySpecialNeeds?.foodAllergies && (
                           <div>Allergies: {revealedData[c.id].dietarySpecialNeeds.foodAllergies}</div>
                         )}
-                        {revealedData[c.id].dietarySpecialNeeds?.mobilityAssistance && (
-                          <div>Mobility: {revealedData[c.id].dietarySpecialNeeds.mobilityAssistance}</div>
+                        {(revealedData[c.id].dietarySpecialNeeds?.mobilityAssistance || []).length > 0 && (
+                          <div>Mobility: {[].concat(revealedData[c.id].dietarySpecialNeeds.mobilityAssistance).filter(Boolean).join(', ')}</div>
                         )}
                         {(revealedData[c.id].dietarySpecialNeeds?.accessibilityNeeds || []).length > 0 && (
                           <div>Accessibility: {[].concat(revealedData[c.id].dietarySpecialNeeds.accessibilityNeeds).join(', ')}</div>
                         )}
-                        {revealedData[c.id].dietarySpecialNeeds?.medicalEquipment && (
-                          <div>Medical equip.: {revealedData[c.id].dietarySpecialNeeds.medicalEquipment}</div>
-                        )}
-                        {(revealedData[c.id].dietarySpecialNeeds?.medicalEquipmentNeeds || []).length > 0 && (
-                          <div>Medical equip. (added): {[].concat(revealedData[c.id].dietarySpecialNeeds.medicalEquipmentNeeds).join(', ')}</div>
+                        {(revealedData[c.id].dietarySpecialNeeds?.medicalEquipment || []).length > 0 && (
+                          <div>Medical equip.: {[].concat(revealedData[c.id].dietarySpecialNeeds.medicalEquipment).filter(Boolean).join(', ')}</div>
                         )}
                         {revealedData[c.id].dietarySpecialNeeds?.otherNotes && (
                           <div>Notes: {revealedData[c.id].dietarySpecialNeeds.otherNotes}</div>

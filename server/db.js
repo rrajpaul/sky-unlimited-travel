@@ -264,12 +264,17 @@ async function initDb() {
   // data from BOTH the Excel import and the manual contact form, gated
   // behind reveal-sensitive since it's meaningfully sensitive detail).
   //
-  // All seven columns below are editable via the admin form once revealed
-  // — there's no import-only/manual-only split anymore. accessibility_
-  // needs_enc and medical_equipment_needs_enc exist alongside mobility_
-  // assistance_enc and medical_equipment_enc as separate free-text fields
-  // (not a schema restriction, just how the form's chip UI vs. free-text
-  // UI happen to be laid out) — see ContactForm.jsx.
+  // All six active encrypted columns (dietary_restrictions_enc,
+  // food_allergies_enc, mobility_assistance_enc, accessibility_needs_enc,
+  // medical_equipment_enc, other_notes_enc) are editable via the admin form
+  // once revealed — see contactsCRM.js and ContactForm.jsx.
+  // medical_equipment_needs_enc is retained in the table for backward
+  // compatibility but is DEAD going forward: the form used to have two
+  // separate "medical equipment" fields (a chip picker on this column and
+  // a free-text field on medical_equipment_enc); they've been consolidated
+  // into a single chip field backed by medical_equipment_enc, the column
+  // the Excel import already writes to. Safe to drop this column in a
+  // later migration once you're confident nothing reads it.
   // ---------------------------------------------------------------------
   await pool.query(`
     CREATE TABLE IF NOT EXISTS dietary_special_needs (

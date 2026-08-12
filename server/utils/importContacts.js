@@ -53,6 +53,24 @@ function parseBoolean(value) {
   return null;
 }
 
+// Medical Equipment is the one dietary/special-needs field editable as
+// chips in the admin form (see ContactForm.jsx), supporting single or
+// multiple values. Import cells may hold one item ("Wheelchair") or
+// several, comma/semicolon separated ("CPAP machine, Oxygen tank") — this
+// splits either into a JSON array string in the same shape
+// contactsCRM.js's serializeChips() produces, so imported and
+// manually-entered data are indistinguishable on reveal. Scoped to this
+// field only — Dietary Restrictions/Food Allergies/Mobility Assistance/
+// Other Notes are intentionally left as raw imported strings, unchanged.
+function parseMedicalEquipmentImport(value) {
+  if (value === null || value === undefined) return null;
+  const parts = String(value)
+    .split(/[,;]/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return parts.length ? JSON.stringify(parts) : null;
+}
+
 function buildFullName(row) {
   const parts = [pick(row, 'First Name'), pick(row, 'Middle'), pick(row, 'Last Name')]
     .filter((p) => p !== null && p !== undefined && String(p).trim() !== '');
@@ -177,7 +195,9 @@ async function importContactsFromWorkbook(buffer) {
       const dietaryRestrictionsEnc = encryptField(pick(dietaryRow, 'Dietary Restrictions'));
       const foodAllergiesEnc = encryptField(pick(dietaryRow, 'Food Allergies'));
       const mobilityAssistanceEnc = encryptField(pick(dietaryRow, 'Mobility Assistance'));
-      const medicalEquipmentEnc = encryptField(pick(dietaryRow, 'Medical Equipment'));
+      // Medical Equipment is stored as a chip array (single or multiple
+      // values), not a raw string — see parseMedicalEquipmentImport above.
+      const medicalEquipmentEnc = encryptField(parseMedicalEquipmentImport(pick(dietaryRow, 'Medical Equipment')));
       const otherNotesEnc = encryptField(pick(dietaryRow, 'Other Notes'));
       const hasDietaryData = [dietaryRestrictionsEnc, foodAllergiesEnc, mobilityAssistanceEnc, medicalEquipmentEnc, otherNotesEnc]
         .some((v) => v !== null && v !== undefined);
