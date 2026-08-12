@@ -313,14 +313,14 @@ export default function ContactsTable() {
 
       {/* Mobile: floating "add contact" button — stays parked near the
           bottom-right corner normally, and only lifts to sit above the
-          pagination bar (measured height + 25px) once that bar is
+          pagination bar (measured height + 60px) once that bar is
           actually scrolled into view, rather than always reserving the
           gap. */}
       <button
         onClick={() => setEditingContact({})}
         aria-label="Add contact"
         title="+ Add contact"
-        style={{ bottom: paginationVisible ? `${paginationHeight + 25}px` : '20px' }}
+        style={{ bottom: paginationVisible ? `${paginationHeight + 60}px` : '20px' }}
         className="md:hidden fixed right-5 z-40 w-14 h-14 rounded-full bg-slate-900 text-white text-2xl leading-none shadow-lg shadow-slate-900/30 flex items-center justify-center active:scale-95 transition-all duration-150"
       >
         +
