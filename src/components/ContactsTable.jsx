@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { contactsApi } from '../api/crmApi';
 import ContactForm from './ContactForm';
 import ImportContactsModal from './ImportContactsModal';
@@ -17,6 +17,14 @@ export default function ContactsTable() {
   const [revealError, setRevealError] = useState(null);
   const [revealedData, setRevealedData] = useState({}); // { [contactId]: { passport, dob, dietarySpecialNeeds } }
 
+  // Measures the pagination bar's actual rendered height so the mobile
+  // floating add-button can sit exactly above it, regardless of future
+  // padding/font-size/wrapping changes to that row. ResizeObserver (not a
+  // one-time measurement) so it stays correct if the row's height changes
+  // after mount too (e.g. text wraps differently at a narrow width).
+  const paginationRef = useRef(null);
+  const [paginationHeight, setPaginationHeight] = useState(0);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -29,6 +37,23 @@ export default function ContactsTable() {
   }, [search, page]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Re-observes whenever the pagination bar mounts/unmounts (totalPages
+  // crossing the >1 threshold), and tracks live size changes for as long
+  // as it's mounted.
+  useEffect(() => {
+    const el = paginationRef.current;
+    if (!el) {
+      setPaginationHeight(0);
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) setPaginationHeight(entry.contentRect.height);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [total, page, pageSize]);
 
   const handleSave = async (data) => {
     if (editingContact?.id) {
@@ -231,7 +256,7 @@ export default function ContactsTable() {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-slate-500">
+        <div ref={paginationRef} className="flex items-center justify-between text-sm text-slate-500">
           <button
             onClick={() => setPage((p) => Math.max(p - 1, 1))}
             disabled={page <= 1}
@@ -262,13 +287,16 @@ export default function ContactsTable() {
         <ImportContactsModal onClose={() => setShowImport(false)} onImported={load} />
       )}
 
-      {/* Mobile: floating "add contact" button — sits above the pagination
-          row when one is showing, so it doesn't cover Previous/Next. */}
+      {/* Mobile: floating "add contact" button — bottom offset is computed
+          from the pagination bar's actual measured height (via
+          ResizeObserver above), so it sits exactly above Previous/Next
+          regardless of future padding/font-size changes to that row. */}
       <button
         onClick={() => setEditingContact({})}
         aria-label="Add contact"
         title="+ Add contact"
-        className={`md:hidden fixed right-5 z-40 w-14 h-14 rounded-full bg-slate-900 text-white text-2xl leading-none shadow-lg shadow-slate-900/30 flex items-center justify-center active:scale-95 transition-transform ${totalPages > 1 ? 'bottom-20' : 'bottom-5'}`}
+        style={{ bottom: totalPages > 1 ? `${paginationHeight + 32}px` : '20px' }}
+        className="md:hidden fixed right-5 z-40 w-14 h-14 rounded-full bg-slate-900 text-white text-2xl leading-none shadow-lg shadow-slate-900/30 flex items-center justify-center active:scale-95 transition-transform"
       >
         +
       </button>
