@@ -25,6 +25,12 @@ export default function ContactsTable() {
   const paginationRef = useRef(null);
   const [paginationHeight, setPaginationHeight] = useState(0);
 
+  // Tracks whether the pagination bar is actually scrolled into view. The
+  // button stays parked near the bottom-right corner normally, and only
+  // lifts to clear the pagination bar once the person has actually
+  // scrolled far enough to see it — rather than always reserving the gap.
+  const [paginationVisible, setPaginationVisible] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -51,6 +57,24 @@ export default function ContactsTable() {
       const entry = entries[0];
       if (entry) setPaginationHeight(entry.contentRect.height);
     });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [total, page, pageSize]);
+
+  // Watches whether the pagination bar is actually visible in the
+  // viewport (i.e. the person has scrolled to the end of the page). Root
+  // is the viewport (window scroll), threshold 0 so it fires as soon as
+  // any part of the bar appears.
+  useEffect(() => {
+    const el = paginationRef.current;
+    if (!el) {
+      setPaginationVisible(false);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => setPaginationVisible(entry.isIntersecting),
+      { threshold: 0 }
+    );
     observer.observe(el);
     return () => observer.disconnect();
   }, [total, page, pageSize]);
@@ -287,16 +311,17 @@ export default function ContactsTable() {
         <ImportContactsModal onClose={() => setShowImport(false)} onImported={load} />
       )}
 
-      {/* Mobile: floating "add contact" button — bottom offset is computed
-          from the pagination bar's actual measured height (via
-          ResizeObserver above), so it sits exactly above Previous/Next
-          regardless of future padding/font-size changes to that row. */}
+      {/* Mobile: floating "add contact" button — stays parked near the
+          bottom-right corner normally, and only lifts to sit above the
+          pagination bar (measured height + 25px) once that bar is
+          actually scrolled into view, rather than always reserving the
+          gap. */}
       <button
         onClick={() => setEditingContact({})}
         aria-label="Add contact"
         title="+ Add contact"
-        style={{ bottom: totalPages > 1 ? `${paginationHeight + 32}px` : '20px' }}
-        className="md:hidden fixed right-5 z-40 w-14 h-14 rounded-full bg-slate-900 text-white text-2xl leading-none shadow-lg shadow-slate-900/30 flex items-center justify-center active:scale-95 transition-transform"
+        style={{ bottom: paginationVisible ? `${paginationHeight + 25}px` : '20px' }}
+        className="md:hidden fixed right-5 z-40 w-14 h-14 rounded-full bg-slate-900 text-white text-2xl leading-none shadow-lg shadow-slate-900/30 flex items-center justify-center active:scale-95 transition-all duration-150"
       >
         +
       </button>
