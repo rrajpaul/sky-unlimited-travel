@@ -116,6 +116,26 @@ function encryptDob(dob) {
   return encryptField(dob ? String(dob).trim() || null : null);
 }
 
+// Normalizes to Proper Case on save — "mary-jane o'connor" -> "Mary-Jane
+// O'Connor", "123 main st" -> "123 Main St". Capitalizes the first letter
+// after the start of the string, a space, a hyphen, or an apostrophe;
+// lowercases everything else. Scoped to first_name/last_name/middle_name,
+// address_line1 (Street Address), city, and region (State/Province) —
+// NOT legal_full_name, which must stay exactly as typed since the form
+// warns changing it breaks re-import matching by name, and NOT
+// address_line2, since apartment/unit/suite values (e.g. "Apt 4B", "PO
+// Box 5") commonly mix case in ways this simple word-capitalization rule
+// gets wrong (it would lowercase the "B" in "4B", since that letter
+// follows a digit rather than a separator).
+function toProperCase(value) {
+  if (value === null || value === undefined) return value;
+  const str = String(value);
+  if (!str.trim()) return str;
+  return str
+    .toLowerCase()
+    .replace(/(^|[\s\-'])([a-z])/g, (_match, sep, char) => sep + char.toUpperCase());
+}
+
 // Upserts all seven encrypted dietary/accessibility/medical columns from
 // whatever the form submitted. Editing any one field only overwrites that
 // column — fields the admin didn't touch keep whatever value was already
@@ -263,10 +283,10 @@ router.post('/', async (req, res) => {
       RETURNING ${BASIC_COLUMNS}
       `,
       [
-        b.first_name || '', b.last_name || '', b.middle_name || null, b.legal_full_name || null,
+        toProperCase(b.first_name) || '', toProperCase(b.last_name) || '', toProperCase(b.middle_name) || null, b.legal_full_name || null,
         b.email || null, b.phone || null, b.company || null,
         b.client_status || null,
-        b.address_line1 || null, b.address_line2 || null, b.city || null, b.region || null,
+        toProperCase(b.address_line1) || null, b.address_line2 || null, toProperCase(b.city) || null, toProperCase(b.region) || null,
         b.postal_code || null, b.country || null,
         b.tags || [], b.notes || null, !!b.do_not_email, !!b.do_not_phone,
         encryptDob(b.dob),
@@ -316,9 +336,9 @@ router.put('/:id', async (req, res) => {
       RETURNING ${BASIC_COLUMNS}
       `,
       [
-        b.first_name || '', b.last_name || '', b.middle_name || null, b.legal_full_name || null,
+        toProperCase(b.first_name) || '', toProperCase(b.last_name) || '', toProperCase(b.middle_name) || null, b.legal_full_name || null,
         b.email || null, b.phone || null, b.company || null, b.client_status || null,
-        b.address_line1 || null, b.address_line2 || null, b.city || null, b.region || null,
+        toProperCase(b.address_line1) || null, b.address_line2 || null, toProperCase(b.city) || null, toProperCase(b.region) || null,
         b.postal_code || null, b.country || null,
         b.tags || [], b.notes || null, !!b.do_not_email, !!b.do_not_phone,
         encryptDob(b.dob),
