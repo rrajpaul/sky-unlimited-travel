@@ -28,6 +28,57 @@ const COMMON_ACCESSIBILITY = ['Wheelchair access', 'Mobility assistance', 'Visua
 const COMMON_MOBILITY_ASSISTANCE = ['Wheelchair', 'Walker', 'Cane', 'Mobility scooter', 'Transfer assistance', 'Aisle seat required', 'Ground-floor room required'];
 const COMMON_MEDICAL_EQUIPMENT = ['CPAP machine', 'Oxygen tank', 'Insulin pump', 'Nebulizer', 'Walker', 'Feeding tube', 'Other medical device'];
 
+// Full country list (~195), common English short names. State/Province
+// below switches to a proper dropdown only when Country is exactly
+// 'United States' or 'Canada' (matching these strings) — every other
+// country gets a free-text State/Province field, since a fixed list
+// doesn't apply/isn't practical for the rest of the world.
+const COUNTRIES = [
+  'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Antigua and Barbuda', 'Argentina',
+  'Armenia', 'Australia', 'Austria', 'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados',
+  'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan', 'Bolivia', 'Bosnia and Herzegovina', 'Botswana',
+  'Brazil', 'Brunei', 'Bulgaria', 'Burkina Faso', 'Burundi', "Cabo Verde", 'Cambodia', 'Cameroon',
+  'Canada', 'Central African Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros',
+  'Congo (Congo-Brazzaville)', 'Costa Rica', 'Croatia', 'Cuba', 'Cyprus', 'Czechia', 'Denmark',
+  'Djibouti', 'Dominica', 'Dominican Republic', 'DR Congo', 'Ecuador', 'Egypt', 'El Salvador',
+  'Equatorial Guinea', 'Eritrea', 'Estonia', 'Eswatini', 'Ethiopia', 'Fiji', 'Finland', 'France',
+  'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Grenada', 'Guatemala', 'Guinea',
+  'Guinea-Bissau', 'Guyana', 'Haiti', 'Honduras', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran',
+  'Iraq', 'Ireland', 'Israel', 'Italy', 'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya',
+  'Kiribati', 'Kuwait', 'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya',
+  'Liechtenstein', 'Lithuania', 'Luxembourg', 'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali',
+  'Malta', 'Marshall Islands', 'Mauritania', 'Mauritius', 'Mexico', 'Micronesia', 'Moldova', 'Monaco',
+  'Mongolia', 'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia', 'Nauru', 'Nepal',
+  'Netherlands', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'North Korea', 'North Macedonia',
+  'Norway', 'Oman', 'Pakistan', 'Palau', 'Palestine', 'Panama', 'Papua New Guinea', 'Paraguay',
+  'Peru', 'Philippines', 'Poland', 'Portugal', 'Qatar', 'Romania', 'Russia', 'Rwanda',
+  'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Vincent and the Grenadines', 'Samoa', 'San Marino',
+  'Sao Tome and Principe', 'Saudi Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone',
+  'Singapore', 'Slovakia', 'Slovenia', 'Solomon Islands', 'Somalia', 'South Africa', 'South Korea',
+  'South Sudan', 'Spain', 'Sri Lanka', 'Sudan', 'Suriname', 'Sweden', 'Switzerland', 'Syria',
+  'Taiwan', 'Tajikistan', 'Tanzania', 'Thailand', 'Timor-Leste', 'Togo', 'Tonga',
+  'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Tuvalu', 'Uganda', 'Ukraine',
+  'United Arab Emirates', 'United Kingdom', 'United States', 'Uruguay', 'Uzbekistan', 'Vanuatu',
+  'Vatican City', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe',
+];
+
+const US_STATES = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware',
+  'District of Columbia', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa',
+  'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
+  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey',
+  'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon',
+  'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah',
+  'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming', 'Puerto Rico',
+  'Guam', 'U.S. Virgin Islands',
+];
+
+const CA_PROVINCES = [
+  'Alberta', 'British Columbia', 'Manitoba', 'New Brunswick', 'Newfoundland and Labrador',
+  'Northwest Territories', 'Nova Scotia', 'Nunavut', 'Ontario', 'Prince Edward Island', 'Quebec',
+  'Saskatchewan', 'Yukon',
+];
+
 export default function ContactForm({ contact, onSave, onCancel }) {
   const isNewContact = !contact?.id;
   const hasSensitiveData = !!contact?.hasDietaryData || !!contact?.hasDob;
@@ -135,7 +186,7 @@ export default function ContactForm({ contact, onSave, onCancel }) {
 
         <Field label="Email" type="email" value={form.email} onChange={update('email')} />
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Phone" value={form.phone} onChange={update('phone')} />
+          <Field label="Phone" type="tel" value={form.phone} onChange={update('phone')} />
           <Field label="Company" value={form.company} onChange={update('company')} />
         </div>
 
@@ -157,11 +208,39 @@ export default function ContactForm({ contact, onSave, onCancel }) {
         <Field label="Address line 2 (apt, unit)" value={form.address_line2} onChange={update('address_line2')} />
         <div className="grid grid-cols-2 gap-3">
           <Field label="City" value={form.city} onChange={update('city')} />
-          <Field label="State / Province" value={form.region} onChange={update('region')} />
+          <label className="block text-sm font-medium text-slate-700">
+            Country
+            <select
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
+              value={form.country || ''}
+              onChange={update('country')}
+            >
+              <option value="">—</option>
+              {COUNTRIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </label>
         </div>
         <div className="grid grid-cols-2 gap-3">
+          {form.country === 'United States' || form.country === 'Canada' ? (
+            <label className="block text-sm font-medium text-slate-700">
+              State / Province
+              <select
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
+                value={form.region || ''}
+                onChange={update('region')}
+              >
+                <option value="">—</option>
+                {(form.country === 'United States' ? US_STATES : CA_PROVINCES).map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <Field label="State / Province" value={form.region} onChange={update('region')} />
+          )}
           <Field label="Postal / ZIP code" value={form.postal_code} onChange={update('postal_code')} />
-          <Field label="Country" value={form.country} onChange={update('country')} />
         </div>
         <Field label="Tags (comma separated)" value={form.tags} onChange={update('tags')} placeholder="vip, honeymoon-2026" />
 
