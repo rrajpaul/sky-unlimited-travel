@@ -3,6 +3,18 @@ import { contactsApi } from '../api/crmApi';
 import ContactForm from './ContactForm';
 import ImportContactsModal from './ImportContactsModal';
 
+// Display-only formatting for the Status column — the stored value (and
+// what ContactForm's <select> options use) stays the canonical uppercase
+// form ('VIP', 'CLIENT', 'FAMILY', 'REFERRAL', 'FRIEND'); this just
+// controls what's shown here, same convention as ContactForm's
+// CLIENT_STATUS_OPTIONS labels (Proper Case, except VIP stays as-is).
+function formatClientStatus(value) {
+  if (!value) return '—';
+  if (value.toUpperCase() === 'VIP') return 'VIP';
+  const lower = value.toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
 export default function ContactsTable() {
   const [contacts, setContacts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -196,7 +208,7 @@ export default function ContactsTable() {
                 </td>
                 <td className="px-4 py-2 text-slate-600">{c.email}</td>
                 <td className="px-4 py-2 text-slate-600">{c.phone}</td>
-                <td className="px-4 py-2 text-slate-600">{c.client_status || '—'}</td>
+                <td className="px-4 py-2 text-slate-600">{formatClientStatus(c.client_status)}</td>
                 <td className="px-4 py-2">
                   <div className="flex flex-wrap gap-1">
                     {(c.tags || []).map((t) => (
