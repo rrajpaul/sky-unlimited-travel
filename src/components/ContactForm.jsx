@@ -103,6 +103,15 @@ export default function ContactForm({ contact, onSave, onCancel }) {
   const [revealError, setRevealError] = useState(null);
   const [revealLoading, setRevealLoading] = useState(false);
 
+  // Cached in memory only (never persisted to disk/localStorage, never
+  // sent anywhere except the eventual save request) after a successful
+  // reveal, so the admin doesn't have to re-enter their password a
+  // second time at Save — the backend's write-side step-up check (see
+  // contactsCRM.js) reuses this same password to authorize changes to
+  // the sensitive fields it protects. Cleared implicitly when this form
+  // unmounts (component state, not module-level).
+  const [confirmedPassword, setConfirmedPassword] = useState(null);
+
   const update = (field) => (e) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setForm((f) => ({ ...f, [field]: value }));
@@ -133,6 +142,7 @@ export default function ContactForm({ contact, onSave, onCancel }) {
         special_requirements_notes: d?.otherNotes || '',
       }));
       setRevealed(true);
+      setConfirmedPassword(revealPassword);
       setRevealing(false);
       setRevealPassword('');
     } catch (err) {
@@ -151,6 +161,29 @@ export default function ContactForm({ contact, onSave, onCancel }) {
         ...form,
         tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
       };
+
+      if (!revealed) {
+        // Sensitive section was never revealed — this admin hasn't seen
+        // (and this form was never loaded with) the real values, so
+        // form.dob/dietary fields are just the empty defaults. Omit
+        // these keys entirely rather than sending blanks: the backend
+        // uses "key absent" as the signal to leave existing encrypted
+        // data untouched, versus "key present but empty" meaning
+        // intentionally clear it.
+        delete payload.dob;
+        delete payload.dietary_restrictions;
+        delete payload.accessibility_needs;
+        delete payload.food_allergies;
+        delete payload.mobility_assistance;
+        delete payload.medical_equipment;
+        delete payload.special_requirements_notes;
+      } else if (confirmedPassword) {
+        // Revealed via a successful password check this session — reuse
+        // that same password to authorize the write, so the admin isn't
+        // prompted again at Save.
+        payload.reauthPassword = confirmedPassword;
+      }
+
       await onSave(payload);
     } catch (err) {
       setError(err.message);

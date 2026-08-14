@@ -16,6 +16,30 @@
 const bcrypt = require('bcrypt');
 const { pool } = require('../db');
 
+// Verifies req.user's password against admins.password_hash, using
+// reauthPassword from the body or x-reauth-password header. Returns a
+// plain boolean — does NOT touch res, so callers decide how to respond.
+// Extracted so routes that need a step-up check on only PART of a
+// request (e.g. a PUT that's mostly non-sensitive fields, only requiring
+// this when a sensitive field is actually changing) can call it directly
+// instead of gating the entire route behind the requireStepUpAuth
+// middleware.
+async function verifyReauthPassword(req) {
+  if (!req.user || !req.user.username) return false;
+
+  const reauthPassword = req.body?.reauthPassword || req.headers['x-reauth-password'];
+  if (!reauthPassword) return false;
+
+  const result = await pool.query(
+    'SELECT * FROM admins WHERE username = $1',
+    [req.user.username]
+  );
+  const admin = result.rows[0];
+  if (!admin) return false;
+
+  return bcrypt.compare(reauthPassword, admin.password_hash);
+}
+
 async function requireStepUpAuth(req, res, next) {
   try {
     if (!req.user || !req.user.username) {
@@ -30,16 +54,7 @@ async function requireStepUpAuth(req, res, next) {
       });
     }
 
-    const result = await pool.query(
-      'SELECT * FROM admins WHERE username = $1',
-      [req.user.username]
-    );
-    const admin = result.rows[0];
-    if (!admin) {
-      return res.status(401).json({ error: 'Not authenticated' });
-    }
-
-    const passwordMatches = await bcrypt.compare(reauthPassword, admin.password_hash);
+    const passwordMatches = await verifyReauthPassword(req);
     if (!passwordMatches) {
       return res.status(401).json({ error: 'Incorrect password' });
     }
@@ -55,3 +70,4 @@ async function requireStepUpAuth(req, res, next) {
 }
 
 module.exports = requireStepUpAuth;
+module.exports.verifyReauthPassword = verifyReauthPassword;

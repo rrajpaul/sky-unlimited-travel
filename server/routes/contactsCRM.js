@@ -51,14 +51,16 @@
 // hasn't been re-normalized into chips yet). Only other_notes_enc remains
 // genuinely free text.
 //
-// NOTE ON WRITE PROTECTION: like the existing dietary fields, dob_enc is
-// only password-gated for READING (via reveal-sensitive, behind
-// requireStepUpAuth). The create/update routes below are NOT behind
-// requireStepUpAuth, so anyone with normal edit access to a contact can
-// still overwrite dob_enc (or the dietary columns) blind, without ever
-// stepping up. That's an existing characteristic of this route file, not
-// something introduced here — flagging it in case DOB write access should
-// be tightened separately from the rest.
+// WRITE-SIDE PROTECTION: PUT /:id requires the reauth password (same
+// mechanism as reveal-sensitive) before it will CHANGE a sensitive field
+// that already had a non-empty value — see fieldRequiresStepUp() below.
+// It does NOT require a password for: fields the request simply didn't
+// include (the admin never revealed that section — those are preserved
+// untouched, not overwritten), or first-time entry into a field that was
+// previously empty (nothing existed yet to protect, matching the
+// read-side reveal gate's own "only lock a section that already has
+// something in it" rule). POST / (create) never requires this at all —
+// a brand-new contact has nothing pre-existing to protect.
 
 const express = require('express');
 const router = express.Router();
@@ -68,6 +70,7 @@ const { pool } = require('../db');
 const { encryptField, decryptField } = require('../utils/encryption');
 const { importContactsFromWorkbook } = require('../utils/importContacts');
 const requireStepUpAuth = require('../middleware/requireStepUpAuth');
+const { verifyReauthPassword } = requireStepUpAuth;
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -116,6 +119,46 @@ function encryptDob(dob) {
   return encryptField(dob ? String(dob).trim() || null : null);
 }
 
+// --- Helpers for the write-side step-up check on PUT /:id ---
+//
+// A sensitive field should only ever require the reauth password when a
+// request is actually CHANGING data that already existed — never for:
+//   (a) a field the request didn't include at all (key absent — the admin
+//       never revealed this section, so nothing was touched), or
+//   (b) first-time entry into a field that was previously empty (nothing
+//       existed yet to protect — matches the read-side reveal gate, which
+//       also only locks a contact's sensitive section when it already
+//       has something stored there).
+// Only "existing non-empty value is being changed or cleared" requires
+// step-up.
+
+function isNonEmptyValue(v) {
+  if (Array.isArray(v)) return v.filter(Boolean).length > 0;
+  return !!(v && String(v).trim());
+}
+
+function arraysEqual(a, b) {
+  const arrA = [].concat(a || []).filter(Boolean).map(String).sort();
+  const arrB = [].concat(b || []).filter(Boolean).map(String).sort();
+  if (arrA.length !== arrB.length) return false;
+  return arrA.every((v, i) => v === arrB[i]);
+}
+
+function textEqual(a, b) {
+  return (a || '').toString().trim() === (b || '').toString().trim();
+}
+
+// keyPresent: whether the request body included this key at all.
+// existing: the current decrypted value for this field.
+// incoming: the submitted value for this field (only meaningful if
+//   keyPresent is true).
+// isArray: whether to compare as a chip array vs. plain text.
+function fieldRequiresStepUp(keyPresent, existing, incoming, isArray) {
+  if (!keyPresent) return false;
+  if (!isNonEmptyValue(existing)) return false;
+  return isArray ? !arraysEqual(existing, incoming) : !textEqual(existing, incoming);
+}
+
 // Normalizes to Proper Case on save — "mary-jane o'connor" -> "Mary-Jane
 // O'Connor", "123 main st" -> "123 Main St". Capitalizes the first letter
 // after the start of the string, a space, a hyphen, or an apostrophe;
@@ -136,22 +179,37 @@ function toProperCase(value) {
     .replace(/(^|[\s\-'])([a-z])/g, (_match, sep, char) => sep + char.toUpperCase());
 }
 
-// Upserts all seven encrypted dietary/accessibility/medical columns from
-// whatever the form submitted. Editing any one field only overwrites that
-// column — fields the admin didn't touch keep whatever value was already
-// there (loaded on reveal), so nothing is silently blanked out by editing
-// an unrelated field.
-async function upsertManualDietaryFields(contactId, {
+// Upserts all six encrypted dietary/accessibility/medical columns from
+// whatever the form submitted. For each field: if the request didn't
+// include that key at all, preserve whatever's already in existingRow
+// rather than blanking it — this is what makes it safe for a PUT that
+// never revealed the sensitive section to still update unrelated fields
+// without wiping this contact's dietary/medical data. If the key IS
+// present (even as an empty value, meaning "intentionally clear this"),
+// it overwrites just that column.
+async function upsertManualDietaryFields(contactId, existingRow, {
   dietaryRestrictions, accessibilityNeeds,
   foodAllergies, mobilityAssistance, medicalEquipment,
   specialRequirementsNotes,
 }) {
-  const dietaryEnc = encryptField(serializeChips(dietaryRestrictions));
-  const accessibilityEnc = encryptField(serializeChips(accessibilityNeeds));
-  const foodAllergiesEnc = encryptField(serializeChips(foodAllergies));
-  const mobilityAssistanceEnc = encryptField(serializeChips(mobilityAssistance));
-  const medicalEquipmentEnc = encryptField(serializeChips(medicalEquipment));
-  const notesEnc = encryptField(specialRequirementsNotes ? String(specialRequirementsNotes).trim() || null : null);
+  const dietaryEnc = dietaryRestrictions === undefined
+    ? (existingRow?.dietary_restrictions_enc ?? null)
+    : encryptField(serializeChips(dietaryRestrictions));
+  const accessibilityEnc = accessibilityNeeds === undefined
+    ? (existingRow?.accessibility_needs_enc ?? null)
+    : encryptField(serializeChips(accessibilityNeeds));
+  const foodAllergiesEnc = foodAllergies === undefined
+    ? (existingRow?.food_allergies_enc ?? null)
+    : encryptField(serializeChips(foodAllergies));
+  const mobilityAssistanceEnc = mobilityAssistance === undefined
+    ? (existingRow?.mobility_assistance_enc ?? null)
+    : encryptField(serializeChips(mobilityAssistance));
+  const medicalEquipmentEnc = medicalEquipment === undefined
+    ? (existingRow?.medical_equipment_enc ?? null)
+    : encryptField(serializeChips(medicalEquipment));
+  const notesEnc = specialRequirementsNotes === undefined
+    ? (existingRow?.other_notes_enc ?? null)
+    : encryptField(specialRequirementsNotes ? String(specialRequirementsNotes).trim() || null : null);
 
   const values = [dietaryEnc, accessibilityEnc, foodAllergiesEnc, mobilityAssistanceEnc, medicalEquipmentEnc, notesEnc];
   const hasAnyData = values.some((v) => v !== null && v !== undefined);
@@ -294,7 +352,7 @@ router.post('/', async (req, res) => {
     );
     const contact = result.rows[0];
 
-    await upsertManualDietaryFields(contact.id, {
+    await upsertManualDietaryFields(contact.id, null, {
       dietaryRestrictions: b.dietary_restrictions,
       accessibilityNeeds: b.accessibility_needs,
       foodAllergies: b.food_allergies,
@@ -325,6 +383,66 @@ router.put('/:id', async (req, res) => {
     if (Number.isNaN(id)) return res.status(400).json({ error: 'Invalid contact id' });
 
     const b = req.body;
+
+    // Fetch existing sensitive data BEFORE writing anything. Needed for
+    // two things at once: (1) detecting whether this request is actually
+    // changing previously-existing sensitive data (the only case that
+    // requires the reauth password — see fieldRequiresStepUp above), and
+    // (2) preserving whatever's already there for any sensitive field
+    // this request didn't include at all (the admin never revealed that
+    // section, so the form omitted these keys rather than sending blanks
+    // that would otherwise silently wipe existing DOB/dietary data).
+    const existingContactResult = await pool.query(
+      `SELECT dob_enc FROM contacts WHERE id = $1`,
+      [id]
+    );
+    if (existingContactResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+    const existingDobEnc = existingContactResult.rows[0].dob_enc;
+    const existingDob = existingDobEnc ? decryptField(existingDobEnc) : null;
+
+    const existingDietaryResult = await pool.query(
+      `SELECT * FROM dietary_special_needs WHERE contact_id = $1`,
+      [id]
+    );
+    const existingDietaryRow = existingDietaryResult.rows[0] || null;
+    const existingDietary = existingDietaryRow ? {
+      dietaryRestrictions: parseMaybeChips(decryptField(existingDietaryRow.dietary_restrictions_enc)),
+      accessibilityNeeds: parseMaybeChips(decryptField(existingDietaryRow.accessibility_needs_enc)),
+      foodAllergies: parseMaybeChips(decryptField(existingDietaryRow.food_allergies_enc)),
+      mobilityAssistance: parseMaybeChips(decryptField(existingDietaryRow.mobility_assistance_enc)),
+      medicalEquipment: parseMaybeChips(decryptField(existingDietaryRow.medical_equipment_enc)),
+      otherNotes: decryptField(existingDietaryRow.other_notes_enc),
+    } : {};
+
+    const sensitiveChanged =
+      fieldRequiresStepUp('dob' in b, existingDob, b.dob, false) ||
+      fieldRequiresStepUp('dietary_restrictions' in b, existingDietary.dietaryRestrictions, b.dietary_restrictions, true) ||
+      fieldRequiresStepUp('accessibility_needs' in b, existingDietary.accessibilityNeeds, b.accessibility_needs, true) ||
+      fieldRequiresStepUp('food_allergies' in b, existingDietary.foodAllergies, b.food_allergies, true) ||
+      fieldRequiresStepUp('mobility_assistance' in b, existingDietary.mobilityAssistance, b.mobility_assistance, true) ||
+      fieldRequiresStepUp('medical_equipment' in b, existingDietary.medicalEquipment, b.medical_equipment, true) ||
+      fieldRequiresStepUp('special_requirements_notes' in b, existingDietary.otherNotes, b.special_requirements_notes, false);
+
+    if (sensitiveChanged) {
+      if (!b.reauthPassword) {
+        return res.status(401).json({
+          error: 'Password re-entry required to change sensitive information',
+          code: 'STEP_UP_REQUIRED',
+        });
+      }
+      const passwordOk = await verifyReauthPassword(req);
+      if (!passwordOk) {
+        return res.status(401).json({ error: 'Incorrect password' });
+      }
+    }
+
+    // Preserve dob_enc unchanged if the request didn't include a 'dob'
+    // key at all (section never revealed); otherwise write whatever was
+    // submitted, including clearing it if b.dob is empty.
+    const dobEncToWrite = ('dob' in b) ? encryptDob(b.dob) : existingDobEnc;
+
     const result = await pool.query(
       `
       UPDATE contacts SET
@@ -341,7 +459,7 @@ router.put('/:id', async (req, res) => {
         toProperCase(b.address_line1) || null, b.address_line2 || null, toProperCase(b.city) || null, toProperCase(b.region) || null,
         b.postal_code || null, b.country || null,
         b.tags || [], b.notes || null, !!b.do_not_email, !!b.do_not_phone,
-        encryptDob(b.dob),
+        dobEncToWrite,
         id,
       ]
     );
@@ -349,11 +467,11 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Contact not found' });
     }
 
-    // Writes all seven encrypted columns from the form's current state.
-    // The form always reloads the real current values on reveal before
-    // allowing edits, so fields the admin didn't touch round-trip back
-    // unchanged rather than being blanked out.
-    await upsertManualDietaryFields(id, {
+    // For each of the six dietary/medical columns: a key absent from the
+    // request preserves existingDietaryRow's value untouched (see
+    // upsertManualDietaryFields); a key present overwrites just that
+    // column, same as before.
+    await upsertManualDietaryFields(id, existingDietaryRow, {
       dietaryRestrictions: b.dietary_restrictions,
       accessibilityNeeds: b.accessibility_needs,
       foodAllergies: b.food_allergies,
@@ -362,7 +480,7 @@ router.put('/:id', async (req, res) => {
       specialRequirementsNotes: b.special_requirements_notes,
     });
 
-    res.json({ ...result.rows[0], hasDob: !!b.dob });
+    res.json({ ...result.rows[0], hasDob: dobEncToWrite != null });
   } catch (err) {
     if (err.code === '23505') {
       if (err.constraint === 'contacts_legal_full_name_unique') {
