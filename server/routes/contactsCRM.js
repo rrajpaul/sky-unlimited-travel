@@ -45,11 +45,11 @@
 // automatically and will no longer surface anywhere in the app.
 //
 // dietary_restrictions_enc, accessibility_needs_enc, mobility_assistance_enc,
-// and medical_equipment_enc are all chip-array fields (serializeChips /
-// parseMaybeChips) — each may hold a JSON array (manual chip selections)
-// or a plain string (older imported free text that hasn't been
-// re-normalized into chips yet). Only food_allergies_enc and
-// other_notes_enc remain genuinely free text.
+// medical_equipment_enc, and food_allergies_enc are all chip-array fields
+// (serializeChips / parseMaybeChips) — each may hold a JSON array (manual
+// chip selections) or a plain string (older imported free text that
+// hasn't been re-normalized into chips yet). Only other_notes_enc remains
+// genuinely free text.
 //
 // NOTE ON WRITE PROTECTION: like the existing dietary fields, dob_enc is
 // only password-gated for READING (via reveal-sensitive, behind
@@ -148,7 +148,7 @@ async function upsertManualDietaryFields(contactId, {
 }) {
   const dietaryEnc = encryptField(serializeChips(dietaryRestrictions));
   const accessibilityEnc = encryptField(serializeChips(accessibilityNeeds));
-  const foodAllergiesEnc = encryptField(foodAllergies ? String(foodAllergies).trim() || null : null);
+  const foodAllergiesEnc = encryptField(serializeChips(foodAllergies));
   const mobilityAssistanceEnc = encryptField(serializeChips(mobilityAssistance));
   const medicalEquipmentEnc = encryptField(serializeChips(medicalEquipment));
   const notesEnc = encryptField(specialRequirementsNotes ? String(specialRequirementsNotes).trim() || null : null);
@@ -433,7 +433,7 @@ router.post('/:id/reveal-sensitive', requireStepUpAuth, async (req, res) => {
         // string (imported free text) — parseMaybeChips returns whichever
         // shape it actually is.
         dietaryRestrictions: parseMaybeChips(decryptField(d.dietary_restrictions_enc)),
-        foodAllergies: decryptField(d.food_allergies_enc),
+        foodAllergies: parseMaybeChips(decryptField(d.food_allergies_enc)),
         mobilityAssistance: parseMaybeChips(decryptField(d.mobility_assistance_enc)),
         accessibilityNeeds: parseMaybeChips(decryptField(d.accessibility_needs_enc)),
         medicalEquipment: parseMaybeChips(decryptField(d.medical_equipment_enc)),

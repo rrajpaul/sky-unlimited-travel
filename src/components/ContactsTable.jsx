@@ -228,8 +228,8 @@ export default function ContactsTable() {
                         {revealedData[c.id].dietarySpecialNeeds?.dietaryRestrictions && (
                           <div>Dietary: {revealedData[c.id].dietarySpecialNeeds.dietaryRestrictions}</div>
                         )}
-                        {revealedData[c.id].dietarySpecialNeeds?.foodAllergies && (
-                          <div>Allergies: {revealedData[c.id].dietarySpecialNeeds.foodAllergies}</div>
+                        {(revealedData[c.id].dietarySpecialNeeds?.foodAllergies || []).length > 0 && (
+                          <div>Allergies: {[].concat(revealedData[c.id].dietarySpecialNeeds.foodAllergies).filter(Boolean).join(', ')}</div>
                         )}
                         {(revealedData[c.id].dietarySpecialNeeds?.mobilityAssistance || []).length > 0 && (
                           <div>Mobility: {[].concat(revealedData[c.id].dietarySpecialNeeds.mobilityAssistance).filter(Boolean).join(', ')}</div>

@@ -9,7 +9,7 @@ const EMPTY = {
   tags: '', notes: '', do_not_email: false, do_not_phone: false,
   dob: '',
   dietary_restrictions: [], accessibility_needs: [],
-  food_allergies: '', mobility_assistance: [], medical_equipment: [],
+  food_allergies: [], mobility_assistance: [], medical_equipment: [],
   special_requirements_notes: '',
 };
 
@@ -24,6 +24,7 @@ const CLIENT_STATUS_OPTIONS = [
 ];
 
 const COMMON_DIETARY = ['Gluten-free', 'Peanut allergy', 'Tree nut allergy', 'Shellfish allergy', 'Dairy-free', 'Vegetarian', 'Vegan', 'Halal', 'Kosher'];
+const COMMON_FOOD_ALLERGIES = ['Peanut', 'Tree nuts', 'Shellfish', 'Fish', 'Dairy', 'Eggs', 'Soy', 'Wheat/Gluten', 'Sesame'];
 const COMMON_ACCESSIBILITY = ['Wheelchair access', 'Mobility assistance', 'Visual impairment', 'Hearing impairment', 'Service animal'];
 const COMMON_MOBILITY_ASSISTANCE = ['Wheelchair', 'Walker', 'Cane', 'Mobility scooter', 'Transfer assistance', 'Aisle seat required', 'Ground-floor room required'];
 const COMMON_MEDICAL_EQUIPMENT = ['CPAP machine', 'Oxygen tank', 'Insulin pump', 'Nebulizer', 'Walker', 'Feeding tube', 'Other medical device'];
@@ -126,7 +127,7 @@ export default function ContactForm({ contact, onSave, onCancel }) {
         dob: data.dob || '',
         dietary_restrictions: [].concat(d?.dietaryRestrictions || []).filter(Boolean),
         accessibility_needs: [].concat(d?.accessibilityNeeds || []).filter(Boolean),
-        food_allergies: d?.foodAllergies || '',
+        food_allergies: [].concat(d?.foodAllergies || []).filter(Boolean),
         mobility_assistance: [].concat(d?.mobilityAssistance || []).filter(Boolean),
         medical_equipment: [].concat(d?.medicalEquipment || []).filter(Boolean),
         special_requirements_notes: d?.otherNotes || '',
@@ -337,11 +338,13 @@ export default function ContactForm({ contact, onSave, onCancel }) {
                 extra={form.dietary_restrictions.filter((v) => !COMMON_DIETARY.includes(v))}
                 onRemoveExtra={(val) => toggleChip('dietary_restrictions', val)()}
               />
-              <Field
-                label="Food allergies (free text, e.g. from import)"
-                value={form.food_allergies}
-                onChange={update('food_allergies')}
-                placeholder="e.g. severe shellfish allergy"
+              <ChipPicker
+                label="Food allergies"
+                options={COMMON_FOOD_ALLERGIES}
+                selected={form.food_allergies}
+                onToggle={(opt) => toggleChip('food_allergies', opt)()}
+                extra={form.food_allergies.filter((v) => !COMMON_FOOD_ALLERGIES.includes(v))}
+                onRemoveExtra={(val) => toggleChip('food_allergies', val)()}
               />
 
               <ChipPicker
