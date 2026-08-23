@@ -296,6 +296,7 @@ const BookingProcessModal = ({ children, destination: initialDestination = '' })
                         <input
                           type="date"
                           name="fromDate"
+                          aria-label="Departure date"
                           value={form.fromDate}
                           onChange={handleChange}
                           min={new Date().toISOString().split('T')[0]}
@@ -307,6 +308,7 @@ const BookingProcessModal = ({ children, destination: initialDestination = '' })
                         <input
                           type="date"
                           name="toDate"
+                          aria-label="Return date"
                           value={form.toDate}
                           onChange={handleChange}
                           min={form.fromDate || new Date().toISOString().split('T')[0]}

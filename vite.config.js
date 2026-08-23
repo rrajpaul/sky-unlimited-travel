@@ -7,6 +7,11 @@ import iframeRouteRestorationPlugin from './plugins/vite-plugin-iframe-route-res
 import selectionModePlugin from './plugins/selection-mode/vite-plugin-selection-mode.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
+// Vitest sets NODE_ENV to 'test' (not 'production'), so isDev is also true
+// during test runs. These visual-editor plugins do dev-server-only DOM/HTML
+// injection that Vitest doesn't need and could interfere with the test
+// transform pipeline, so we explicitly exclude them when running under Vitest.
+const isTest = !!process.env.VITEST;
 
 const configHorizonsViteErrorHandler = `
 const observer = new MutationObserver((mutations) => {
@@ -280,7 +285,9 @@ logger.error = (msg, options) => {
 export default defineConfig({
 	customLogger: logger,
 	plugins: [
-		...(isDev ? [inlineEditPlugin(), editModeDevPlugin(), iframeRouteRestorationPlugin(), selectionModePlugin()] : []),
+		// Excluded under Vitest (see isTest above) — these are dev-server-only
+		// visual-editor plugins with no purpose in a test run.
+		...(isDev && !isTest ? [inlineEditPlugin(), editModeDevPlugin(), iframeRouteRestorationPlugin(), selectionModePlugin()] : []),
 		react(),
 		addTransformIndexHtml
 	],
@@ -312,5 +319,22 @@ export default defineConfig({
 				'@babel/types'
 			]
 		}
-	}
+	},
+	// --- Added for Vitest ---
+	// Everything below is new; nothing above this comment was changed except
+	// the `isTest` guard on plugins noted above.
+	test: {
+		environment: 'jsdom',
+		setupFiles: './tests/setupTests.js',
+		globals: true,
+		css: true,
+		// Broadened to cover both tests/unit and tests/integration — Vitest's
+		// `include` filters even when you pass an explicit file path on the
+		// command line, so a narrower pattern here would silently skip
+		// integration tests when running `vitest run tests/integration`.
+		// Use `npm test` for the unit suite day-to-day (fast, no real DB
+		// needed); use `npm run test:integration` for the integration suite
+		// (needs a real disposable Postgres — see .env.test).
+		include: ['tests/**/*.test.{js,jsx}'],
+	},
 });

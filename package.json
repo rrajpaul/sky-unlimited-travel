@@ -7,7 +7,10 @@
     "dev": "vite --host :: --port 3000",
     "build": "node tools/generate-llms.js || true && vite build",
     "preview": "vite preview --host 0.0.0.0 --port $PORT",
-    "lint": "eslint . --quiet"
+    "lint": "eslint . --quiet",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "DATABASE_URL=$TEST_DATABASE_URL vitest run tests/integration"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "^1.3.1",
@@ -48,6 +51,13 @@
     "eslint-config-react-app": "^7.0.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.3.2",
-    "vite": "^4.4.5"
+    "vite": "^4.4.5",
+    "vitest": "^0.34.6",
+    "jsdom": "^25.0.0",
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/user-event": "^14.5.0",
+    "@vitest/coverage-v8": "^0.34.6",
+    "undici": "^6.19.0",
+    "dotenv": "^16.4.5"
   }
 }
