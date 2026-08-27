@@ -31,6 +31,7 @@ const CampaignsTab = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null); // null = creating new
   const [draft, setDraft] = useState(emptyDraft);
+  const [draftLoading, setDraftLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -82,15 +83,34 @@ const CampaignsTab = () => {
     setShowForm(true);
   };
 
-  const openEditForm = (campaign) => {
+  // NOTE: the campaigns list (GET /api/campaigns) only returns summary
+  // fields for the table — subject, status, filter_tags, sent/failed
+  // counts, created_at. It does NOT include html_body. Passing the list
+  // row straight into the form left the HTML body empty on edit, so we
+  // fetch the full campaign record by ID first (same pattern as
+  // openDetail) before populating the draft.
+  const openEditForm = async (campaign) => {
     setEditingId(campaign.id);
-    setDraft({
-      subject: campaign.subject,
-      htmlBody: campaign.html_body,
-      tagsInput: (campaign.filter_tags || []).join(', '),
-    });
     setFormError('');
+    setDraft(emptyDraft);
     setShowForm(true);
+    setDraftLoading(true);
+
+    try {
+      const res = await fetch(apiUrl(`/api/campaigns/${campaign.id}`), { headers: authHeaders() });
+      if (!res.ok) throw new Error('Failed to load campaign');
+      const full = await res.json();
+      setDraft({
+        subject: full.subject,
+        htmlBody: full.html_body,
+        tagsInput: (full.filter_tags || []).join(', '),
+      });
+    } catch (err) {
+      console.error('Load campaign for edit error:', err);
+      setFormError('Failed to load campaign content.');
+    } finally {
+      setDraftLoading(false);
+    }
   };
 
   const closeForm = () => {
@@ -421,45 +441,51 @@ const CampaignsTab = () => {
               {editingId ? 'Edit Draft Campaign' : 'New Campaign'}
             </h3>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
-              <input
-                type="text"
-                required
-                value={draft.subject}
-                onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
-                placeholder="Your exclusive summer travel deals"
-              />
-            </div>
+            {draftLoading ? (
+              <p className="text-slate-500 mb-4">Loading campaign content…</p>
+            ) : (
+              <>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
+                  <input
+                    type="text"
+                    required
+                    value={draft.subject}
+                    onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
+                    placeholder="Your exclusive summer travel deals"
+                  />
+                </div>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Filter tags <span className="text-slate-400 font-normal">(comma-separated, leave empty to send to all contacts)</span>
-              </label>
-              <input
-                type="text"
-                value={draft.tagsInput}
-                onChange={(e) => setDraft({ ...draft, tagsInput: e.target.value })}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
-                placeholder="newsletter, bahamas-interest"
-              />
-            </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Filter tags <span className="text-slate-400 font-normal">(comma-separated, leave empty to send to all contacts)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={draft.tagsInput}
+                    onChange={(e) => setDraft({ ...draft, tagsInput: e.target.value })}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
+                    placeholder="newsletter, bahamas-interest"
+                  />
+                </div>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1">HTML body</label>
-              <textarea
-                required
-                rows={10}
-                value={draft.htmlBody}
-                onChange={(e) => setDraft({ ...draft, htmlBody: e.target.value })}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
-                placeholder="<p>Hi there...</p>"
-              />
-              <p className="text-xs text-slate-400 mt-1">
-                An unsubscribe link is appended automatically when the campaign is sent.
-              </p>
-            </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">HTML body</label>
+                  <textarea
+                    required
+                    rows={10}
+                    value={draft.htmlBody}
+                    onChange={(e) => setDraft({ ...draft, htmlBody: e.target.value })}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
+                    placeholder="<p>Hi there...</p>"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    An unsubscribe link is appended automatically when the campaign is sent.
+                  </p>
+                </div>
+              </>
+            )}
 
             {formError && (
               <p role="alert" className="text-red-600 text-sm mb-4">{formError}</p>
@@ -475,7 +501,7 @@ const CampaignsTab = () => {
               </button>
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || draftLoading}
                 className="bg-[#1a2947] text-white font-medium rounded-lg px-4 py-2 hover:bg-[#243a63] transition-colors disabled:opacity-60"
               >
                 {saving ? 'Saving…' : 'Save Draft'}
