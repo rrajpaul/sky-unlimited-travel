@@ -88,7 +88,11 @@ router.post('/', requireAdmin, async (req, res) => {
       `INSERT INTO campaigns (subject, html_body, filter_tags, created_by)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [subject.trim(), htmlBody, tags, req.admin?.email || req.admin?.username || null]
+      // authMiddleware assigns the decoded token to req.user (not req.admin),
+      // so reading req.admin here silently recorded created_by as null for
+      // every campaign. The token currently carries only `username`; the
+      // email fallback is kept in case it's added to the payload later.
+      [subject.trim(), htmlBody, tags, req.user?.email || req.user?.username || null]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -367,10 +371,27 @@ async function processCampaignQueueBatch() {
   }
 }
 
-setInterval(processCampaignQueueBatch, CAMPAIGN_POLL_INTERVAL_MS);
-// Run once shortly after startup too, so anything left 'queued' from
-// before a restart doesn't sit idle for a full interval.
-setTimeout(processCampaignQueueBatch, 5000);
+// Starting these at module scope means they begin ticking as soon as
+// anything requires this file — including server/app.js, and therefore every
+// test file that builds the app. A test run doesn't want a live sender
+// polling a test database (and would need campaigns/campaign_recipients/
+// contacts tables to exist purely to keep it from erroring), so skip it
+// under Vitest. Nothing else changes: outside tests both timers start
+// exactly as before.
+//
+// A cleaner long-term shape is to export a startCampaignWorker() and call it
+// from index.js alongside app.listen(), matching the split app.js already
+// documents — requiring a route file wouldn't start background work at all
+// then. That needs an index.js edit to avoid silently stopping sends in
+// production, so it's deliberately not done here.
+const IS_TEST_RUN = !!process.env.VITEST || process.env.NODE_ENV === 'test';
+
+if (!IS_TEST_RUN) {
+  setInterval(processCampaignQueueBatch, CAMPAIGN_POLL_INTERVAL_MS);
+  // Run once shortly after startup too, so anything left 'queued' from
+  // before a restart doesn't sit idle for a full interval.
+  setTimeout(processCampaignQueueBatch, 5000);
+}
 
 // POST manually trigger a queue-processing tick right now (admin only).
 // Handy for testing, or for nudging things along without waiting for the

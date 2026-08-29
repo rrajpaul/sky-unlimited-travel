@@ -47,9 +47,25 @@ async function verifyTurnstile(token, remoteip) {
 }
 
 // Helper: load the current giveaway settings from the DB.
+//
+// start_date/end_date are TIMESTAMP WITHOUT TIME ZONE, and the PATCH route
+// below writes them via `.toISOString()` — so what's stored is a UTC wall
+// clock with the offset dropped. node-pg parses a bare timestamp using the
+// NODE PROCESS's local zone, so a plain `new Date(row.start_date)` silently
+// reinterprets that UTC clock as local time: an end of 23:59:59 UTC becomes
+// 23:59:59 EDT (= 03:59:59 UTC next day), shifting the whole window by the
+// server's offset. That made the public entry form open and close four
+// hours late in America/Toronto, and skewed the countdown on the site.
+//
+// `AT TIME ZONE 'UTC'` promotes each column to a timestamptz that says "this
+// wall clock is UTC", which node-pg then parses into the correct absolute
+// instant regardless of where the server runs.
 async function getGiveawaySettings() {
   const result = await pool.query(
-    'SELECT start_date, end_date, prize_value_usd, prize_value_cad, destinations FROM giveaway_settings WHERE id = 1'
+    `SELECT start_date AT TIME ZONE 'UTC' AS start_date,
+            end_date   AT TIME ZONE 'UTC' AS end_date,
+            prize_value_usd, prize_value_cad, destinations
+     FROM giveaway_settings WHERE id = 1`
   );
   if (result.rows.length === 0) return null;
   const row = result.rows[0];
@@ -147,7 +163,12 @@ router.get('/', requireAdmin, async (req, res) => {
 
 const giveawayLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,                   // max submissions per IP
+  // Default is the previous hardcoded 5, so production behaviour is
+  // unchanged. Configurable because every test that exercises this route
+  // shares one IP (127.0.0.1), so a fixed limit of 5 makes the 6th request
+  // in a suite return 429 regardless of what it was actually testing.
+  // .env.test raises it; nothing else sets it.
+  max: parseInt(process.env.GIVEAWAY_RATE_LIMIT_MAX || '5', 10),
   standardHeaders: true,
   legacyHeaders: false,
   message: {

@@ -53,6 +53,21 @@ beforeEach(() => {
   vi.resetAllMocks();
 });
 
+// Two tests below deliberately drive routes down their failure paths, and
+// those routes log via console.error by design. Each silences it for the
+// duration of that test and restores it immediately afterwards.
+//
+// Restored explicitly rather than through an afterEach hook, for two
+// reasons specific to this file:
+//   - vi.resetAllMocks() above resets a spy's implementation but does NOT
+//     put the original console.error back, so a spy left in place would stay
+//     stubbed for every later test in the file.
+//   - vi.restoreAllMocks() in an afterEach would also call mockRestore() on
+//     pool.query and sendMail, which are deliberate property assignments
+//     meant to survive the whole run.
+// Scoping it per-test keeps console.error live everywhere else, so genuine
+// unexpected errors still surface in the output.
+
 describe('POST /api/inquiry', () => {
   it('saves a valid inquiry', async () => {
     pool.query.mockResolvedValueOnce({ rows: [] });
@@ -152,6 +167,10 @@ describe('POST /api/inquiry', () => {
   });
 
   it('returns 500 when the database insert fails', async () => {
+    // The route logs 'Inquiry insert error:' on this path by design — see
+    // the note above this describe block for why it's restored inline.
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
     pool.query.mockRejectedValueOnce(new Error('connection lost'));
 
     const res = await request(app).post('/api/inquiry').send({
@@ -161,6 +180,8 @@ describe('POST /api/inquiry', () => {
 
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('Something went wrong. Please try again.');
+
+    errorSpy.mockRestore();
   });
 });
 
@@ -212,6 +233,9 @@ describe('POST /api/inquiry/notify-admin', () => {
   });
 
   it('returns 500 when sending the email fails', async () => {
+    // The route logs 'Admin notification error:' on this path by design.
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
     sendMail.mockRejectedValueOnce(new Error('SMTP timeout'));
 
     const res = await request(app).post('/api/inquiry/notify-admin').send({
@@ -221,5 +245,7 @@ describe('POST /api/inquiry/notify-admin', () => {
 
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('Failed to send notification');
+
+    errorSpy.mockRestore();
   });
 });

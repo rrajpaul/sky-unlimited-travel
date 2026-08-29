@@ -244,6 +244,11 @@ describe('BookingProcessModal — submission', () => {
   });
 
   it('shows an error message when the inquiry request fails', async () => {
+    // The component logs 'Inquiry capture failed:' on this path by design.
+    // Silence it here only — leaving console.error live everywhere else, so
+    // unexpected errors and React warnings still show up in the output.
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
     global.fetch = vi.fn().mockResolvedValueOnce({
       ok: false,
       json: () => Promise.resolve({ error: 'Server exploded' }),
