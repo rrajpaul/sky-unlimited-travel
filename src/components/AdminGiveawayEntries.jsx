@@ -22,6 +22,7 @@ const AdminGiveawayEntries = () => {
   const [actionId, setActionId] = useState(null);
   const [emailActionId, setEmailActionId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [picking, setPicking] = useState(false);
 
   // --- Giveaway window + prize settings ---
   const [startDate, setStartDate] = useState('');
@@ -33,6 +34,9 @@ const AdminGiveawayEntries = () => {
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [settingsSaved, setSettingsSaved] = useState(false);
+  // Raw ISO window, kept alongside the datetime-local form values so entry
+  // rows can be marked eligible/ineligible without re-parsing form strings.
+  const [windowRange, setWindowRange] = useState({ start: null, end: null });
 
   const loadSettings = async () => {
     setSettingsLoading(true);
@@ -46,6 +50,10 @@ const AdminGiveawayEntries = () => {
       setPrizeValueUsd(String(data.prizeValueUsd ?? ''));
       setPrizeValueCad(String(data.prizeValueCad ?? ''));
       setDestinations(Array.isArray(data.destinations) ? data.destinations : []);
+      setWindowRange({
+        start: data.startDate ? new Date(data.startDate) : null,
+        end: data.endDate ? new Date(data.endDate) : null,
+      });
     } catch (err) {
       setSettingsError(err.message || 'Failed to load giveaway settings');
     } finally {
@@ -83,6 +91,9 @@ const AdminGiveawayEntries = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to save settings');
       setSettingsSaved(true);
+      // Changing the window changes which entries are eligible, so refresh
+      // the range used for the row badges too.
+      setWindowRange({ start: new Date(startDate), end: new Date(endDate) });
       setTimeout(() => setSettingsSaved(false), 3000);
     } catch (err) {
       setSettingsError(err.message || 'Failed to save settings');
@@ -142,6 +153,55 @@ const AdminGiveawayEntries = () => {
     loadEntries();
     loadSettings();
   }, []);
+
+  // True when this entry was submitted inside the configured giveaway
+  // window, i.e. it's one the server would consider for a random pick.
+  // Mirrors the inclusive >= / <= comparison in routes/giveaway.js.
+  const isEligible = (entry) => {
+    if (!windowRange.start || !windowRange.end) return true;
+    const created = new Date(entry.created_at);
+    return created >= windowRange.start && created <= windowRange.end;
+  };
+
+  const eligibleCount = entries.filter(isEligible).length;
+  const ineligibleCount = entries.length - eligibleCount;
+
+  const handlePickWinner = async () => {
+    const confirmed = window.confirm(
+      `Pick a random winner from the ${eligibleCount} entr${eligibleCount === 1 ? 'y' : 'ies'} inside the giveaway window?\n\n` +
+      'This replaces any winner you have already selected.'
+    );
+    if (!confirmed) return;
+
+    setPicking(true);
+    setError('');
+
+    try {
+      const res = await fetch(apiUrl('/api/giveaway/pick-winner'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        window.location.href = '/admin';
+        return;
+      }
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to pick a winner');
+
+      await loadEntries();
+      alert(`Winner picked: ${data.winner?.name} (${data.winner?.email})`);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Failed to pick a winner');
+    } finally {
+      setPicking(false);
+    }
+  };
 
   const handleToggleWinner = async (entry) => {
     setActionId(entry.id);
@@ -230,6 +290,18 @@ const AdminGiveawayEntries = () => {
         .includes(search)
     );
   });
+
+  const OutsideWindowBadge = ({ entry }) => {
+    if (isEligible(entry)) return null;
+    return (
+      <span
+        title="Submitted outside the giveaway window — excluded from random winner selection"
+        className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500"
+      >
+        Outside window
+      </span>
+    );
+  };
 
   const WinnerEmailButton = ({ entry }) => {
     if (!entry.is_winner) return null;
@@ -420,13 +492,35 @@ const AdminGiveawayEntries = () => {
         <div className="bg-white rounded-lg shadow overflow-hidden">
 
           <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
-            <input
-              type="text"
-              placeholder="Search name, email or destination..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full sm:w-96 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-            />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <input
+                type="text"
+                placeholder="Search name, email or destination..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full sm:w-96 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              />
+
+              {/* Kept here rather than in the page header: this acts on the
+                  entry list below, and the eligibility count it draws from
+                  (and quotes in its confirmation) is rendered right beneath
+                  it. It also keeps a destructive action away from the
+                  harmless Refresh / navigation buttons up top. */}
+              <button
+                onClick={handlePickWinner}
+                disabled={picking || eligibleCount === 0}
+                className="px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              >
+                {picking ? 'Picking…' : 'Pick Random Winner'}
+              </button>
+            </div>
+
+            {!settingsLoading && entries.length > 0 && (
+              <p className="mt-2 text-xs text-gray-500">
+                {eligibleCount} of {entries.length} {entries.length === 1 ? 'entry is' : 'entries are'} inside the giveaway window
+                {ineligibleCount > 0 && ` — ${ineligibleCount} excluded from random selection`}
+              </p>
+            )}
           </div>
 
           {error && (
@@ -460,6 +554,9 @@ const AdminGiveawayEntries = () => {
                         <p className="text-xs text-gray-500 truncate">
                           {entry.email}
                         </p>
+                        <div className="mt-1">
+                          <OutsideWindowBadge entry={entry} />
+                        </div>
                       </div>
                       <p className="text-xs text-gray-400 shrink-0 text-right">
                         {new Date(entry.created_at).toLocaleDateString()}
@@ -527,7 +624,10 @@ const AdminGiveawayEntries = () => {
                           {entry.destination}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {new Date(entry.created_at).toLocaleString()}
+                          <div className="flex items-center gap-2">
+                            <span>{new Date(entry.created_at).toLocaleString()}</span>
+                            <OutsideWindowBadge entry={entry} />
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <WinnerToggle entry={entry} />

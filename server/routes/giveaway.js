@@ -341,24 +341,72 @@ router.post('/:id/send-winner-email', requireAdmin, async (req, res) => {
   }
 });
 
-// POST pick a random winner from all entries (admin only)
+// POST pick a random winner (admin only).
+// Only entries whose created_at falls inside the configured giveaway window
+// are eligible. Entries submitted outside that window (e.g. rows created
+// before the current start/end dates were set, or seeded/test rows) are
+// never selected.
+//
+// IMPORTANT: the window comparison happens entirely in SQL, against the
+// giveaway_settings columns directly. Do NOT route these timestamps through
+// JS Dates (e.g. getGiveawaySettings() + .toISOString()) — start_date,
+// end_date and created_at are all TIMESTAMP WITHOUT TIME ZONE, so node-pg
+// hands them back as Dates interpreted in the server's LOCAL zone, and
+// .toISOString() then re-labels that local time as UTC. On a machine running
+// anything other than UTC that silently shifts the window by the local
+// offset (e.g. an end of 23:59:59 becomes 03:59:59 the next day in
+// America/Toronto), letting late entries win and excluding entries that sat
+// exactly on the start boundary. Comparing TIMESTAMP to TIMESTAMP inside
+// Postgres sidesteps the conversion entirely.
 router.post('/pick-winner', requireAdmin, async (req, res) => {
+  const client = await pool.connect();
   try {
-    const countResult = await pool.query('SELECT COUNT(*) AS c FROM giveaway_entries');
-    if (parseInt(countResult.rows[0].c, 10) === 0) {
-      return res.status(400).json({ error: 'No entries to pick a winner from.' });
+    const settingsCheck = await client.query('SELECT 1 FROM giveaway_settings WHERE id = 1');
+    if (settingsCheck.rows.length === 0) {
+      return res.status(400).json({
+        error: 'No giveaway settings configured yet. Set the start and end dates before picking a winner.',
+      });
     }
 
-    await pool.query('UPDATE giveaway_entries SET is_winner = false');
-
-    const result = await pool.query(
-      'UPDATE giveaway_entries SET is_winner = true WHERE id = (SELECT id FROM giveaway_entries ORDER BY RANDOM() LIMIT 1) RETURNING *'
+    // Check eligibility BEFORE clearing the existing winner — otherwise a
+    // window with no entries would wipe the current winner and set no new
+    // one, silently leaving the giveaway with nobody selected.
+    const eligible = await client.query(
+      `SELECT COUNT(*) AS c FROM giveaway_entries e
+       WHERE e.created_at >= (SELECT start_date FROM giveaway_settings WHERE id = 1)
+         AND e.created_at <= (SELECT end_date FROM giveaway_settings WHERE id = 1)`
     );
+    const eligibleCount = parseInt(eligible.rows[0].c, 10);
 
-    res.json({ ok: true, winner: result.rows[0] });
+    if (eligibleCount === 0) {
+      return res.status(400).json({
+        error: 'No entries were submitted within the giveaway window, so there is nobody to pick from.',
+      });
+    }
+
+    // Clearing the old winner and setting the new one must be atomic — a
+    // failure between the two would leave the giveaway with no winner at all.
+    await client.query('BEGIN');
+    await client.query('UPDATE giveaway_entries SET is_winner = false');
+    const result = await client.query(
+      `UPDATE giveaway_entries SET is_winner = true
+       WHERE id = (
+         SELECT e.id FROM giveaway_entries e
+         WHERE e.created_at >= (SELECT start_date FROM giveaway_settings WHERE id = 1)
+           AND e.created_at <= (SELECT end_date FROM giveaway_settings WHERE id = 1)
+         ORDER BY RANDOM() LIMIT 1
+       )
+       RETURNING *`
+    );
+    await client.query('COMMIT');
+
+    res.json({ ok: true, winner: result.rows[0], eligibleCount });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Pick winner error:', err);
     res.status(500).json({ error: 'Failed to pick a winner' });
+  } finally {
+    client.release();
   }
 });
 
