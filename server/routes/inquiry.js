@@ -4,9 +4,10 @@ const { pool } = require('../db');
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STRIPE_URL = 'https://buy.stripe.com/9B63cx7II4vfev51iF3Ru01';
 const { sendMail } = require('../utils/mailer');
+const requireAdmin = require('../auth/authMiddleware');
 
-// GET all inquiries
-router.get('/', async (req, res) => {
+// GET all inquiries (admin only) — returns full customer PII
+router.get('/', requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(
       'SELECT * FROM inquiries ORDER BY created_at DESC'
@@ -48,8 +49,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// POST send payment link
-router.post('/:id/send-payment-link', async (req, res) => {
+// POST send payment link (admin only) — emails a real customer
+router.post('/:id/send-payment-link', requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
@@ -113,8 +114,8 @@ router.post('/:id/send-payment-link', async (req, res) => {
   }
 });
 
-// PATCH payment status (toggle paid/unpaid)
-router.patch('/:id/payment-status', async (req, res) => {
+// PATCH payment status (toggle paid/unpaid) (admin only)
+router.patch('/:id/payment-status', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { payment_status } = req.body;
 

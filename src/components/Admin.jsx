@@ -57,6 +57,17 @@ const AdminPage = () => {
     checkAuth();
   }, []);
 
+  // Once /api/inquiry routes require auth, an expired or invalid token
+  // comes back as a 401. Without this the admin would just see an empty
+  // table (or a generic "failed" alert) and have no idea they need to log
+  // in again — so clear the dead token and drop back to the login screen.
+  const handleSessionExpired = () => {
+    localStorage.removeItem('adminToken');
+    setIsLoggedIn(false);
+    setRegistrations([]);
+    setError('Your session has expired. Please sign in again.');
+  };
+
   const loadRegistrations = async () => {
     try {
       const token = localStorage.getItem('adminToken');
@@ -66,6 +77,8 @@ const AdminPage = () => {
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (res.status === 401) return handleSessionExpired();
 
       const data = await res.json();
 
@@ -157,9 +170,14 @@ const AdminPage = () => {
 
   const handleSendPaymentLink = async (registration) => {
     try {
+      const token = localStorage.getItem('adminToken');
       const res = await fetch(apiUrl(`/api/inquiry/${registration.id}/send-payment-link`), {
         method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
+      if (res.status === 401) return handleSessionExpired();
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       alert(`Payment link sent to ${registration.email}!`);
@@ -173,11 +191,16 @@ const AdminPage = () => {
   const handleTogglePayment = async (registration) => {
     const newStatus = registration.payment_status === 'paid' ? 'unpaid' : 'paid';
     try {
+      const token = localStorage.getItem('adminToken');
       const res = await fetch(apiUrl(`/api/inquiry/${registration.id}/payment-status`), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ payment_status: newStatus }),
       });
+      if (res.status === 401) return handleSessionExpired();
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       loadRegistrations();

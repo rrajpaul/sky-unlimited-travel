@@ -328,13 +328,23 @@ export default defineConfig({
 		setupFiles: './tests/setupTests.js',
 		globals: true,
 		css: true,
-		// Broadened to cover both tests/unit and tests/integration — Vitest's
-		// `include` filters even when you pass an explicit file path on the
-		// command line, so a narrower pattern here would silently skip
-		// integration tests when running `vitest run tests/integration`.
-		// Use `npm test` for the unit suite day-to-day (fast, no real DB
-		// needed); use `npm run test:integration` for the integration suite
-		// (needs a real disposable Postgres — see .env.test).
 		include: ['tests/**/*.test.{js,jsx}'],
+
+		// Run test FILES one at a time. Both integration files create,
+		// TRUNCATE and DROP the same `inquiries` table in one shared
+		// Postgres database; in parallel (the default on a multi-core
+		// machine) they stomp on each other — one file's afterAll DROP
+		// lands mid-run in the other ("relation "inquiries" does not
+		// exist"), and rows seeded by one show up in the other's
+		// row-count assertions.
+		//
+		// NOTE: do NOT use `singleThread: true` for this. It also
+		// serializes files, but shares one worker's jsdom document and
+		// module registry across them: leftover DOM from a previous file,
+		// and both integration files receiving the SAME pg Pool, so the
+		// first file's pool.end() kills the second.
+		// (On Vitest 1.x+ the equivalent is `fileParallelism: false`.)
+		minThreads: 1,
+		maxThreads: 1,
 	},
 });
