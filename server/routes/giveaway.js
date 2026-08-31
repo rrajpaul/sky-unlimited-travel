@@ -4,6 +4,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const requireAdmin = require('../auth/authMiddleware');
 const { sendMail } = require('../utils/mailer');
+const { escapeHtml } = require('../utils/escapeHtml');
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // The full set of destinations this feature supports choosing from.
@@ -324,13 +325,13 @@ router.post('/:id/send-winner-email', requireAdmin, async (req, res) => {
             <h1 style="color: white; margin: 0; font-size: 24px;">You're Our Winner! 🎉</h1>
           </div>
           <div style="background-color: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
-            <h2 style="color: #1a2947; margin-top: 0;">Hi ${entry.name},</h2>
+            <h2 style="color: #1a2947; margin-top: 0;">Hi ${escapeHtml(entry.name)},</h2>
             <p style="color: #6b7280;">
               Congratulations — you've been randomly selected as the winner of the
               Sky Unlimited Travel giveaway!
             </p>
             <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin: 24px 0;">
-              <p style="margin: 4px 0; color: #374151;"><strong>Prize:</strong> ${prizeLabel} credit toward your ${destinationLabel} trip</p>
+              <p style="margin: 4px 0; color: #374151;"><strong>Prize:</strong> ${escapeHtml(prizeLabel)} credit toward your ${escapeHtml(destinationLabel)} trip</p>
             </div>
             <p style="color: #6b7280;">
               To claim your prize, please reply to this email or contact us at

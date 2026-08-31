@@ -4,6 +4,7 @@ const { pool } = require('../db');
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STRIPE_URL = 'https://buy.stripe.com/9B63cx7II4vfev51iF3Ru01';
 const { sendMail } = require('../utils/mailer');
+const { escapeHtml } = require('../utils/escapeHtml');
 const requireAdmin = require('../auth/authMiddleware');
 
 // GET all inquiries (admin only) — returns full customer PII
@@ -76,11 +77,11 @@ router.post('/:id/send-payment-link', requireAdmin, async (req, res) => {
             <h1 style="color: white; margin: 0; font-size: 24px;">Sky Unlimited Travel</h1>
           </div>
           <div style="background-color: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
-            <h2 style="color: #1a2947; margin-top: 0;">Hello ${inquiry.name},</h2>
+            <h2 style="color: #1a2947; margin-top: 0;">Hello ${escapeHtml(inquiry.name)},</h2>
             <p style="color: #6b7280;">Thank you for your travel booking request. Your trip details are below:</p>
             <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin: 24px 0;">
-              ${destination ? `<p style="margin: 4px 0; color: #374151;"><strong>Destination:</strong> ${destination}</p>` : ''}
-              ${dateRange ? `<p style="margin: 4px 0; color: #374151;"><strong>Travel Dates:</strong> ${dateRange}</p>` : ''}
+              ${destination ? `<p style="margin: 4px 0; color: #374151;"><strong>Destination:</strong> ${escapeHtml(destination)}</p>` : ''}
+              ${dateRange ? `<p style="margin: 4px 0; color: #374151;"><strong>Travel Dates:</strong> ${escapeHtml(dateRange)}</p>` : ''}
             </div>
             <p style="color: #6b7280;">To secure your booking, please complete your payment by clicking the button below:</p>
             <div style="text-align: center; margin: 32px 0;">
@@ -183,13 +184,13 @@ router.post('/notify-admin', async (req, res) => {
           <div style="background-color: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
             <h2 style="color: #1a2947; margin-top: 0;">Customer Details</h2>
             <div style="background-color: #f9fafb; border-radius: 8px; padding: 16px; margin: 16px 0;">
-              <p style="margin: 6px 0; color: #374151;"><strong>Name:</strong> ${name}</p>
-              <p style="margin: 6px 0; color: #374151;"><strong>Email:</strong> ${email}</p>
-              <p style="margin: 6px 0; color: #374151;"><strong>Phone:</strong> ${phone || 'Not provided'}</p>
-              <p style="margin: 6px 0; color: #374151;"><strong>Destination:</strong> ${destination || 'Not specified'}</p>
-              <p style="margin: 6px 0; color: #374151;"><strong>Departure:</strong> ${fromDate || '—'}</p>
-              <p style="margin: 6px 0; color: #374151;"><strong>Return:</strong> ${toDate || '—'}</p>
-              <p style="margin: 6px 0; color: #374151;"><strong>Details:</strong> ${details || 'None'}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Name:</strong> ${escapeHtml(name)}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Email:</strong> ${escapeHtml(email)}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Phone:</strong> ${escapeHtml(phone) || 'Not provided'}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Destination:</strong> ${escapeHtml(destination) || 'Not specified'}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Departure:</strong> ${escapeHtml(fromDate) || '—'}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Return:</strong> ${escapeHtml(toDate) || '—'}</p>
+              <p style="margin: 6px 0; color: #374151;"><strong>Details:</strong> ${escapeHtml(details) || 'None'}</p>
             </div>
             <p style="color: #6b7280; font-size: 14px;">Log in to your admin panel to follow up.</p>
           </div>
