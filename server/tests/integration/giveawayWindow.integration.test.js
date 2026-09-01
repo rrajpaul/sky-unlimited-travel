@@ -52,19 +52,19 @@ beforeAll(async () => {
       destination TEXT,
       is_winner BOOLEAN DEFAULT false,
       winner_email_sent BOOLEAN DEFAULT false,
-      winner_email_sent_at TIMESTAMP,
-      created_at TIMESTAMP DEFAULT NOW()
+      winner_email_sent_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS giveaway_settings (
       id INTEGER PRIMARY KEY,
-      start_date TIMESTAMP NOT NULL,
-      end_date TIMESTAMP NOT NULL,
+      start_date TIMESTAMPTZ NOT NULL,
+      end_date TIMESTAMPTZ NOT NULL,
       prize_value_usd NUMERIC,
       prize_value_cad NUMERIC,
       destinations JSONB,
-      updated_at TIMESTAMP DEFAULT NOW()
+      updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
 

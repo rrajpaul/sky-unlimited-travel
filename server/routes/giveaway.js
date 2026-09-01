@@ -49,24 +49,16 @@ async function verifyTurnstile(token, remoteip) {
 
 // Helper: load the current giveaway settings from the DB.
 //
-// start_date/end_date are TIMESTAMP WITHOUT TIME ZONE, and the PATCH route
-// below writes them via `.toISOString()` — so what's stored is a UTC wall
-// clock with the offset dropped. node-pg parses a bare timestamp using the
-// NODE PROCESS's local zone, so a plain `new Date(row.start_date)` silently
-// reinterprets that UTC clock as local time: an end of 23:59:59 UTC becomes
-// 23:59:59 EDT (= 03:59:59 UTC next day), shifting the whole window by the
-// server's offset. That made the public entry form open and close four
-// hours late in America/Toronto, and skewed the countdown on the site.
-//
-// `AT TIME ZONE 'UTC'` promotes each column to a timestamptz that says "this
-// wall clock is UTC", which node-pg then parses into the correct absolute
-// instant regardless of where the server runs.
+// start_date/end_date are TIMESTAMPTZ, so node-pg hands them back as correct
+// absolute instants and a plain SELECT is right. Do NOT add
+// `AT TIME ZONE 'UTC'` here: on a timestamptz column that converts down to a
+// bare wall clock, which node-pg then reads in the server's LOCAL zone —
+// shifting the whole giveaway window by the local offset (four hours in
+// America/Toronto). That would be correct only if these columns were
+// `timestamp without time zone`, which they aren't.
 async function getGiveawaySettings() {
   const result = await pool.query(
-    `SELECT start_date AT TIME ZONE 'UTC' AS start_date,
-            end_date   AT TIME ZONE 'UTC' AS end_date,
-            prize_value_usd, prize_value_cad, destinations
-     FROM giveaway_settings WHERE id = 1`
+    'SELECT start_date, end_date, prize_value_usd, prize_value_cad, destinations FROM giveaway_settings WHERE id = 1'
   );
   if (result.rows.length === 0) return null;
   const row = result.rows[0];

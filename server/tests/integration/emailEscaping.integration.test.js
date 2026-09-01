@@ -61,9 +61,9 @@ beforeAll(async () => {
       from_date DATE, to_date DATE,
       payment_status VARCHAR(20) DEFAULT 'unpaid',
       payment_link_sent BOOLEAN DEFAULT false,
-      payment_link_sent_at TIMESTAMP,
-      payment_paid_at TIMESTAMP,
-      created_at TIMESTAMP DEFAULT NOW()
+      payment_link_sent_at TIMESTAMPTZ,
+      payment_paid_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
   await pool.query(`
@@ -72,16 +72,16 @@ beforeAll(async () => {
       name TEXT, email TEXT UNIQUE, destination TEXT,
       is_winner BOOLEAN DEFAULT false,
       winner_email_sent BOOLEAN DEFAULT false,
-      winner_email_sent_at TIMESTAMP,
-      created_at TIMESTAMP DEFAULT NOW()
+      winner_email_sent_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS giveaway_settings (
       id INTEGER PRIMARY KEY,
-      start_date TIMESTAMP NOT NULL, end_date TIMESTAMP NOT NULL,
+      start_date TIMESTAMPTZ NOT NULL, end_date TIMESTAMPTZ NOT NULL,
       prize_value_usd NUMERIC, prize_value_cad NUMERIC,
-      destinations JSONB, updated_at TIMESTAMP DEFAULT NOW()
+      destinations JSONB, updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
   // Present only so campaigns.js's queries have somewhere to point.
@@ -91,11 +91,11 @@ beforeAll(async () => {
   await pool.query(`CREATE TABLE IF NOT EXISTS campaigns (
     id SERIAL PRIMARY KEY, subject TEXT, html_body TEXT, filter_tags TEXT[],
     status VARCHAR(20) DEFAULT 'draft', created_by TEXT,
-    created_at TIMESTAMP DEFAULT NOW(), sent_at TIMESTAMP)`);
+    created_at TIMESTAMPTZ DEFAULT NOW(), sent_at TIMESTAMPTZ)`);
   await pool.query(`CREATE TABLE IF NOT EXISTS campaign_recipients (
     id SERIAL PRIMARY KEY, campaign_id INTEGER REFERENCES campaigns(id),
     contact_id INTEGER REFERENCES contacts(id), status VARCHAR(20) DEFAULT 'pending',
-    error TEXT, sent_at TIMESTAMP, UNIQUE (campaign_id, contact_id))`);
+    error TEXT, sent_at TIMESTAMPTZ, UNIQUE (campaign_id, contact_id))`);
 
   const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
   await pool.query(

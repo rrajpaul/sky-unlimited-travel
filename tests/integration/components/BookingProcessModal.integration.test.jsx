@@ -52,7 +52,7 @@ beforeAll(async () => {
       details TEXT,
       from_date DATE,
       to_date DATE,
-      created_at TIMESTAMP DEFAULT NOW()
+      created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
 

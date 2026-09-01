@@ -104,9 +104,9 @@ beforeAll(async () => {
       to_date DATE,
       payment_status VARCHAR(20) DEFAULT 'unpaid',
       payment_link_sent BOOLEAN DEFAULT false,
-      payment_link_sent_at TIMESTAMP,
-      payment_paid_at TIMESTAMP,
-      created_at TIMESTAMP DEFAULT NOW()
+      payment_link_sent_at TIMESTAMPTZ,
+      payment_paid_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
 
@@ -136,8 +136,8 @@ beforeAll(async () => {
       filter_tags TEXT[],
       status VARCHAR(20) DEFAULT 'draft',
       created_by TEXT,
-      created_at TIMESTAMP DEFAULT NOW(),
-      sent_at TIMESTAMP
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      sent_at TIMESTAMPTZ
     )
   `);
   await pool.query(`
@@ -147,7 +147,7 @@ beforeAll(async () => {
       contact_id INTEGER REFERENCES contacts(id),
       status VARCHAR(20) DEFAULT 'pending',
       error TEXT,
-      sent_at TIMESTAMP,
+      sent_at TIMESTAMPTZ,
       UNIQUE (campaign_id, contact_id)
     )
   `);
