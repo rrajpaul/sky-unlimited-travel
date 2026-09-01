@@ -119,12 +119,10 @@ const BookingProcessModal = ({ children, destination: initialDestination = '' })
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Request failed');
 
-      // Notify Tasha
-      await fetch(apiUrl('/api/inquiry/notify-admin'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
+      // The admin notification is sent server-side by POST /api/inquiry, so
+      // there's no second call here any more. That also means a customer
+      // closing the tab mid-submit can't leave a saved booking with nobody
+      // notified.
 
       setSuccess(true);
       setStatus('idle');

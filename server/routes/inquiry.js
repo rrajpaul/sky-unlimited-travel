@@ -43,6 +43,13 @@ router.post('/', async (req, res) => {
         toDate || null
       ]
     );
+
+    // Notify the admin here rather than relying on the client to make a
+    // second call. This can't fail the request — the inquiry is already
+    // saved, and losing a booking because email was down would be worse
+    // than a missed notification (which is logged above).
+    await sendAdminNotification({ name, email, phone, destination, fromDate, toDate, details });
+
     res.json({ ok: true });
   } catch (err) {
     console.error('Inquiry insert error:', err);
@@ -168,10 +175,13 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   res.json({ received: true });
 });
 
-// POST notify admin of new inquiry
-router.post('/notify-admin', async (req, res) => {
-  const { name, email, phone, destination, fromDate, toDate, details } = req.body;
-
+// Sends the "new booking request" email to ADMIN_EMAIL.
+//
+// Called directly by POST / below, so a saved inquiry always notifies without
+// depending on the browser making a second request. Deliberately swallows its
+// own errors: a mail outage must not fail a booking that was already stored.
+// Returns true/false so callers can report the outcome if they care.
+async function sendAdminNotification({ name, email, phone, destination, fromDate, toDate, details }) {
   try {
     await sendMail({
       to: process.env.ADMIN_EMAIL,
@@ -197,11 +207,27 @@ router.post('/notify-admin', async (req, res) => {
         </div>
       `,
     });
-    res.json({ ok: true });
+    return true;
   } catch (err) {
     console.error('Admin notification error:', err);
-    res.status(500).json({ error: 'Failed to send notification' });
+    return false;
   }
+}
+
+// POST notify admin of new inquiry (admin only).
+//
+// The public booking form no longer calls this — POST / sends the
+// notification server-side. It stays here, behind auth, so an admin can
+// re-send a notification manually, and so any still-cached copy of the old
+// public frontend gets a harmless 401 rather than a working public
+// email-sending endpoint. That old code ignores the response, so nothing
+// user-visible breaks.
+router.post('/notify-admin', requireAdmin, async (req, res) => {
+  const sent = await sendAdminNotification(req.body);
+  if (!sent) {
+    return res.status(500).json({ error: 'Failed to send notification' });
+  }
+  res.json({ ok: true });
 });
 
 module.exports = router;
