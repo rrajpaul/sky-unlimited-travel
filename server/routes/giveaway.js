@@ -47,22 +47,21 @@ async function verifyTurnstile(token, remoteip) {
   }
 }
 
-// Helper: load the current giveaway settings from the DB.
+// Helper: load the currently active giveaway (archived_at IS NULL) from the
+// giveaways table. There is at most one — enforced by a partial unique
+// index in the migration, not just by convention here.
 //
-// start_date/end_date are TIMESTAMPTZ, so node-pg hands them back as correct
-// absolute instants and a plain SELECT is right. Do NOT add
-// `AT TIME ZONE 'UTC'` here: on a timestamptz column that converts down to a
-// bare wall clock, which node-pg then reads in the server's LOCAL zone —
-// shifting the whole giveaway window by the local offset (four hours in
-// America/Toronto). That would be correct only if these columns were
-// `timestamp without time zone`, which they aren't.
-async function getGiveawaySettings() {
+// start_date/end_date are TIMESTAMPTZ on this table (declared explicitly in
+// migration_giveaways_unified.sql), so node-pg hands them back as correct
+// absolute instants and a plain SELECT is right — no AT TIME ZONE needed.
+async function getCurrentGiveaway() {
   const result = await pool.query(
-    'SELECT start_date, end_date, prize_value_usd, prize_value_cad, destinations FROM giveaway_settings WHERE id = 1'
+    'SELECT id, start_date, end_date, prize_value_usd, prize_value_cad, destinations FROM giveaways WHERE archived_at IS NULL'
   );
   if (result.rows.length === 0) return null;
   const row = result.rows[0];
   return {
+    id: row.id,
     start: new Date(row.start_date),
     end: new Date(row.end_date),
     prizeValueUsd: parseFloat(row.prize_value_usd),
@@ -76,16 +75,17 @@ async function getGiveawaySettings() {
 // "ended", what prize amount to display, and which destination(s) to offer)
 router.get('/settings', async (req, res) => {
   try {
-    const settings = await getGiveawaySettings();
-    if (!settings) {
+    const g = await getCurrentGiveaway();
+    if (!g) {
       return res.status(404).json({ error: 'No giveaway settings configured yet.' });
     }
     res.json({
-      startDate: settings.start.toISOString(),
-      endDate: settings.end.toISOString(),
-      prizeValueUsd: settings.prizeValueUsd,
-      prizeValueCad: settings.prizeValueCad,
-      destinations: settings.destinations,
+      id: g.id,
+      startDate: g.start.toISOString(),
+      endDate: g.end.toISOString(),
+      prizeValueUsd: g.prizeValueUsd,
+      prizeValueCad: g.prizeValueCad,
+      destinations: g.destinations,
     });
   } catch (err) {
     console.error('Fetch giveaway settings error:', err);
@@ -93,7 +93,9 @@ router.get('/settings', async (req, res) => {
   }
 });
 
-// PATCH update the giveaway settings (admin only)
+// PATCH update the giveaway settings (admin only). Updates the current
+// active row in place if one exists (same id — entries already linked to
+// it stay linked, unaffected by the edit); otherwise inserts a fresh row.
 router.patch('/settings', requireAdmin, async (req, res) => {
   const { startDate, endDate, prizeValueUsd, prizeValueCad, destinations } = req.body;
 
@@ -120,24 +122,107 @@ router.patch('/settings', requireAdmin, async (req, res) => {
   }
 
   try {
-    await pool.query(
-      `INSERT INTO giveaway_settings (id, start_date, end_date, prize_value_usd, prize_value_cad, destinations, updated_at)
-       VALUES (1, $1, $2, $3, $4, $5, NOW())
-       ON CONFLICT (id) DO UPDATE
-       SET start_date = $1, end_date = $2, prize_value_usd = $3, prize_value_cad = $4, destinations = $5, updated_at = NOW()`,
-      [start.toISOString(), end.toISOString(), usd, cad, JSON.stringify(destinations)]
-    );
+    const existing = await pool.query('SELECT id FROM giveaways WHERE archived_at IS NULL');
+
+    let row;
+    if (existing.rows.length > 0) {
+      const updated = await pool.query(
+        `UPDATE giveaways
+         SET start_date = $1, end_date = $2, prize_value_usd = $3, prize_value_cad = $4, destinations = $5
+         WHERE id = $6
+         RETURNING *`,
+        [start.toISOString(), end.toISOString(), usd, cad, JSON.stringify(destinations), existing.rows[0].id]
+      );
+      row = updated.rows[0];
+    } else {
+      const inserted = await pool.query(
+        `INSERT INTO giveaways (start_date, end_date, prize_value_usd, prize_value_cad, destinations)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [start.toISOString(), end.toISOString(), usd, cad, JSON.stringify(destinations)]
+      );
+      row = inserted.rows[0];
+    }
+
     res.json({
       ok: true,
-      startDate: start.toISOString(),
-      endDate: end.toISOString(),
-      prizeValueUsd: usd,
-      prizeValueCad: cad,
-      destinations,
+      id: row.id,
+      startDate: new Date(row.start_date).toISOString(),
+      endDate: new Date(row.end_date).toISOString(),
+      prizeValueUsd: parseFloat(row.prize_value_usd),
+      prizeValueCad: parseFloat(row.prize_value_cad),
+      destinations: row.destinations,
     });
   } catch (err) {
     console.error('Update giveaway settings error:', err);
     res.status(500).json({ error: 'Failed to update giveaway settings' });
+  }
+});
+
+// POST archive the giveaway that just ended (admin only). One atomic
+// UPDATE: flips archived_at on the active row, but only if it has actually
+// ended — this is a server-side check, not just a UI affordance, since a
+// giveaway can only ever be archived once (archived_at IS NULL is what the
+// unique index and every other query in this file key off of).
+router.post('/archive', requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE giveaways
+       SET archived_at = NOW()
+       WHERE archived_at IS NULL AND end_date <= NOW()
+       RETURNING *`
+    );
+
+    if (result.rows.length === 0) {
+      const active = await pool.query('SELECT id FROM giveaways WHERE archived_at IS NULL');
+      if (active.rows.length === 0) {
+        return res.status(400).json({ error: 'No giveaway settings configured yet.' });
+      }
+      return res.status(400).json({ error: 'This giveaway has not ended yet.' });
+    }
+
+    const row = result.rows[0];
+    res.json({
+      ok: true,
+      archived: {
+        id: row.id,
+        startDate: row.start_date,
+        endDate: row.end_date,
+        prizeValueUsd: parseFloat(row.prize_value_usd),
+        prizeValueCad: parseFloat(row.prize_value_cad),
+        destinations: row.destinations,
+        archivedAt: row.archived_at,
+      },
+    });
+  } catch (err) {
+    console.error('Archive giveaway error:', err);
+    res.status(500).json({ error: 'Failed to archive giveaway' });
+  }
+});
+
+// GET past giveaways (admin only), most recently archived first
+router.get('/history', requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, start_date, end_date, prize_value_usd, prize_value_cad, destinations, archived_at
+       FROM giveaways
+       WHERE archived_at IS NOT NULL
+       ORDER BY archived_at DESC`
+    );
+    res.json(
+      result.rows.map((row) => ({
+        id: row.id,
+        startDate: row.start_date,
+        endDate: row.end_date,
+        prizeValueUsd: parseFloat(row.prize_value_usd),
+        prizeValueCad: parseFloat(row.prize_value_cad),
+        destinations: row.destinations,
+        archivedAt: row.archived_at,
+      }))
+    );
+  } catch (err) {
+    console.error('Fetch giveaway history error:', err);
+    res.status(500).json({ error: 'Failed to fetch past giveaways' });
   }
 });
 
@@ -169,13 +254,17 @@ const giveawayLimiter = rateLimit({
   }
 });
 
-// POST new giveaway entry (public — used by the site's entry form)
+// POST new giveaway entry (public — used by the site's entry form).
+// Stores giveaway_id — the permanent link to whichever giveaway is active
+// right now — alongside the existing destination and created_at (date
+// entered) columns. If no giveaway is configured at all, giveaway_id stays
+// NULL — same "always open" behaviour as before.
 router.post('/', giveawayLimiter, async (req, res) => {
-  let settings;
+  let giveaway;
   try {
-    settings = await getGiveawaySettings();
+    giveaway = await getCurrentGiveaway();
     const now = new Date();
-    if (settings && (now < settings.start || now > settings.end)) {
+    if (giveaway && (now < giveaway.start || now > giveaway.end)) {
       return res.status(403).json({ error: 'This giveaway is not currently accepting entries.' });
     }
   } catch (err) {
@@ -215,9 +304,9 @@ router.post('/', giveawayLimiter, async (req, res) => {
     return res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 
-  // Build the allowed set from live settings: the active destinations, plus
+  // Build the allowed set from the active giveaway: its destinations, plus
   // "Either" only if more than one destination is currently offered.
-  const activeDestinations = settings?.destinations?.length ? settings.destinations : ALLOWED_DESTINATIONS;
+  const activeDestinations = giveaway?.destinations?.length ? giveaway.destinations : ALLOWED_DESTINATIONS;
   const allowedForEntry = activeDestinations.length > 1
     ? [...activeDestinations, 'Either']
     : activeDestinations;
@@ -239,9 +328,14 @@ router.post('/', giveawayLimiter, async (req, res) => {
     }
 
     await pool.query(
-      `INSERT INTO giveaway_entries (name, email, destination)
-       VALUES ($1, $2, $3)`,
-      [name.trim(), email.trim().toLowerCase(), safeDestination]
+      `INSERT INTO giveaway_entries (name, email, destination, giveaway_id)
+       VALUES ($1, $2, $3, $4)`,
+      [
+        name.trim(),
+        email.trim().toLowerCase(),
+        safeDestination,
+        giveaway?.id ?? null,
+      ]
     );
     res.json({ ok: true });
   } catch (err) {
@@ -260,13 +354,16 @@ router.patch('/:id/winner', requireAdmin, async (req, res) => {
   }
 
   try {
-    const existing = await pool.query('SELECT id FROM giveaway_entries WHERE id = $1', [id]);
+    const existing = await pool.query('SELECT id, giveaway_id FROM giveaway_entries WHERE id = $1', [id]);
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: 'Entry not found' });
     }
 
     if (is_winner) {
-      await pool.query('UPDATE giveaway_entries SET is_winner = false');
+      // Scoped to this entry's own giveaway — clearing winner flags across
+      // every giveaway ever run would silently un-mark past winners too.
+      const { giveaway_id } = existing.rows[0];
+      await pool.query('UPDATE giveaway_entries SET is_winner = false WHERE giveaway_id IS NOT DISTINCT FROM $1', [giveaway_id]);
       await pool.query('UPDATE giveaway_entries SET is_winner = true WHERE id = $1', [id]);
     } else {
       await pool.query('UPDATE giveaway_entries SET is_winner = false WHERE id = $1', [id]);
@@ -281,7 +378,7 @@ router.patch('/:id/winner', requireAdmin, async (req, res) => {
 
 // POST send the "you won" email to a specific entry (admin only)
 // Requires the entry to already be marked as the winner. Uses the same
-// sendMail util as your inquiries route, and live giveaway settings
+// sendMail util as your inquiries route, and the current giveaway settings
 // (prize amount, destination, dates) so the email always matches what's
 // configured, without hardcoding amounts here.
 router.post('/:id/send-winner-email', requireAdmin, async (req, res) => {
@@ -298,14 +395,14 @@ router.post('/:id/send-winner-email', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'This entry is not marked as the winner. Mark them as winner first.' });
     }
 
-    const settings = await getGiveawaySettings();
-    const destinationLabel = settings?.destinations?.length
-      ? (settings.destinations.length === 1
-          ? settings.destinations[0]
-          : settings.destinations.join(' or '))
+    const giveaway = await getCurrentGiveaway();
+    const destinationLabel = giveaway?.destinations?.length
+      ? (giveaway.destinations.length === 1
+          ? giveaway.destinations[0]
+          : giveaway.destinations.join(' or '))
       : entry.destination;
-    const prizeLabel = settings
-      ? `$${settings.prizeValueUsd} USD ($${settings.prizeValueCad} CAD)`
+    const prizeLabel = giveaway
+      ? `$${giveaway.prizeValueUsd} USD ($${giveaway.prizeValueCad} CAD)`
       : 'your prize';
 
     await sendMail({
@@ -355,62 +452,52 @@ router.post('/:id/send-winner-email', requireAdmin, async (req, res) => {
   }
 });
 
-// POST pick a random winner (admin only).
-// Only entries whose created_at falls inside the configured giveaway window
-// are eligible. Entries submitted outside that window (e.g. rows created
-// before the current start/end dates were set, or seeded/test rows) are
-// never selected.
-//
-// IMPORTANT: the window comparison happens entirely in SQL, against the
-// giveaway_settings columns directly. Do NOT route these timestamps through
-// JS Dates (e.g. getGiveawaySettings() + .toISOString()) — start_date,
-// end_date and created_at are all TIMESTAMP WITHOUT TIME ZONE, so node-pg
-// hands them back as Dates interpreted in the server's LOCAL zone, and
-// .toISOString() then re-labels that local time as UTC. On a machine running
-// anything other than UTC that silently shifts the window by the local
-// offset (e.g. an end of 23:59:59 becomes 03:59:59 the next day in
-// America/Toronto), letting late entries win and excluding entries that sat
-// exactly on the start boundary. Comparing TIMESTAMP to TIMESTAMP inside
-// Postgres sidesteps the conversion entirely.
+// POST pick a random winner (admin only). Eligible entries are now those
+// whose giveaway_id matches the currently active giveaway — a direct link
+// set at entry time — rather than re-deriving eligibility by comparing
+// created_at to the live start/end dates. That date-range comparison used
+// to run against ALL entries ever submitted, so two giveaways with
+// overlapping or coincidentally similar windows could cross-contaminate
+// each other's eligible pool; scoping by giveaway_id closes that off.
 router.post('/pick-winner', requireAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
-    const settingsCheck = await client.query('SELECT 1 FROM giveaway_settings WHERE id = 1');
-    if (settingsCheck.rows.length === 0) {
+    const current = await client.query('SELECT id FROM giveaways WHERE archived_at IS NULL');
+    if (current.rows.length === 0) {
       return res.status(400).json({
         error: 'No giveaway settings configured yet. Set the start and end dates before picking a winner.',
       });
     }
+    const giveawayId = current.rows[0].id;
 
     // Check eligibility BEFORE clearing the existing winner — otherwise a
-    // window with no entries would wipe the current winner and set no new
+    // giveaway with no entries would wipe the current winner and set no new
     // one, silently leaving the giveaway with nobody selected.
     const eligible = await client.query(
-      `SELECT COUNT(*) AS c FROM giveaway_entries e
-       WHERE e.created_at >= (SELECT start_date FROM giveaway_settings WHERE id = 1)
-         AND e.created_at <= (SELECT end_date FROM giveaway_settings WHERE id = 1)`
+      'SELECT COUNT(*) AS c FROM giveaway_entries WHERE giveaway_id = $1',
+      [giveawayId]
     );
     const eligibleCount = parseInt(eligible.rows[0].c, 10);
 
     if (eligibleCount === 0) {
       return res.status(400).json({
-        error: 'No entries were submitted within the giveaway window, so there is nobody to pick from.',
+        error: 'No entries were submitted for this giveaway, so there is nobody to pick from.',
       });
     }
 
     // Clearing the old winner and setting the new one must be atomic — a
-    // failure between the two would leave the giveaway with no winner at all.
+    // failure between the two would leave the giveaway with no winner at
+    // all. Scoped to this giveaway_id so past giveaways' winners aren't
+    // touched.
     await client.query('BEGIN');
-    await client.query('UPDATE giveaway_entries SET is_winner = false');
+    await client.query('UPDATE giveaway_entries SET is_winner = false WHERE giveaway_id = $1', [giveawayId]);
     const result = await client.query(
       `UPDATE giveaway_entries SET is_winner = true
        WHERE id = (
-         SELECT e.id FROM giveaway_entries e
-         WHERE e.created_at >= (SELECT start_date FROM giveaway_settings WHERE id = 1)
-           AND e.created_at <= (SELECT end_date FROM giveaway_settings WHERE id = 1)
-         ORDER BY RANDOM() LIMIT 1
+         SELECT id FROM giveaway_entries WHERE giveaway_id = $1 ORDER BY RANDOM() LIMIT 1
        )
-       RETURNING *`
+       RETURNING *`,
+      [giveawayId]
     );
     await client.query('COMMIT');
 

@@ -12,6 +12,13 @@ function toDatetimeLocalValue(isoString) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function fmtDateTime(value) {
+  if (!value) return '—';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString();
+}
+
 // Keep in sync with ALLOWED_DESTINATIONS in routes/giveaway.js
 const ALL_DESTINATIONS = ['Bahamas', 'Jamaica'];
 
@@ -37,12 +44,42 @@ const AdminGiveawayEntries = () => {
   // Raw ISO window, kept alongside the datetime-local form values so entry
   // rows can be marked eligible/ineligible without re-parsing form strings.
   const [windowRange, setWindowRange] = useState({ start: null, end: null });
+  // The active giveaway's id. Entries now carry their own giveaway_id (set
+  // server-side at entry time), so eligibility is a direct id match rather
+  // than a date-range comparison — see isEligible below.
+  const [currentGiveawayId, setCurrentGiveawayId] = useState(null);
+
+  // --- Archive / history ---
+  const [archiving, setArchiving] = useState(false);
+  const [archiveError, setArchiveError] = useState('');
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const now = new Date();
+  const hasWindow = Boolean(windowRange.start && windowRange.end);
+  const giveawayEnded = hasWindow && now > windowRange.end;
+  const giveawayUpcoming = hasWindow && now < windowRange.start;
+  const giveawayActive = hasWindow && !giveawayEnded && !giveawayUpcoming;
 
   const loadSettings = async () => {
     setSettingsLoading(true);
     setSettingsError('');
     try {
       const res = await fetch(apiUrl('/api/giveaway/settings'));
+      if (res.status === 404) {
+        // No giveaway configured yet (e.g. right after archiving) — that's
+        // not a failure, just an empty form.
+        setStartDate('');
+        setEndDate('');
+        setPrizeValueUsd('');
+        setPrizeValueCad('');
+        setDestinations([]);
+        setWindowRange({ start: null, end: null });
+        setCurrentGiveawayId(null);
+        return;
+      }
       if (!res.ok) throw new Error('Failed to load giveaway settings');
       const data = await res.json();
       setStartDate(toDatetimeLocalValue(data.startDate));
@@ -54,10 +91,37 @@ const AdminGiveawayEntries = () => {
         start: data.startDate ? new Date(data.startDate) : null,
         end: data.endDate ? new Date(data.endDate) : null,
       });
+      setCurrentGiveawayId(data.id ?? null);
     } catch (err) {
       setSettingsError(err.message || 'Failed to load giveaway settings');
     } finally {
       setSettingsLoading(false);
+    }
+  };
+
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const res = await fetch(apiUrl('/api/giveaway/history'), {
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        window.location.href = '/admin';
+        return;
+      }
+
+      if (!res.ok) throw new Error('Failed to load past giveaways');
+      const data = await res.json();
+      setHistory(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setHistoryError(err.message || 'Failed to load past giveaways');
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -94,11 +158,59 @@ const AdminGiveawayEntries = () => {
       // Changing the window changes which entries are eligible, so refresh
       // the range used for the row badges too.
       setWindowRange({ start: new Date(startDate), end: new Date(endDate) });
+      setCurrentGiveawayId(data.id ?? null);
       setTimeout(() => setSettingsSaved(false), 3000);
     } catch (err) {
       setSettingsError(err.message || 'Failed to save settings');
     } finally {
       setSettingsSaving(false);
+    }
+  };
+
+  // Archives the giveaway that just ended, then clears the form so the
+  // admin can fill in a fresh window/prize/destinations for the next one.
+  // Expects a backend route that stores the current settings row into a
+  // history table and clears the live settings before returning.
+  const handleArchiveAndCreate = async () => {
+    const confirmed = window.confirm(
+      'This archives the giveaway that just ended and clears the settings for a new one. Continue?'
+    );
+    if (!confirmed) return;
+
+    setArchiving(true);
+    setArchiveError('');
+
+    try {
+      const res = await fetch(apiUrl('/api/giveaway/archive'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem('adminToken');
+        window.location.href = '/admin';
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to archive giveaway');
+
+      // Clear the form for the new giveaway.
+      setStartDate('');
+      setEndDate('');
+      setPrizeValueUsd('');
+      setPrizeValueCad('');
+      setDestinations([]);
+      setWindowRange({ start: null, end: null });
+      setCurrentGiveawayId(null);
+
+      await loadHistory();
+    } catch (err) {
+      setArchiveError(err.message || 'Failed to archive giveaway');
+    } finally {
+      setArchiving(false);
     }
   };
 
@@ -152,15 +264,15 @@ const AdminGiveawayEntries = () => {
 
     loadEntries();
     loadSettings();
+    loadHistory();
   }, []);
 
   // True when this entry was submitted inside the configured giveaway
   // window, i.e. it's one the server would consider for a random pick.
   // Mirrors the inclusive >= / <= comparison in routes/giveaway.js.
   const isEligible = (entry) => {
-    if (!windowRange.start || !windowRange.end) return true;
-    const created = new Date(entry.created_at);
-    return created >= windowRange.start && created <= windowRange.end;
+    if (currentGiveawayId == null) return true;
+    return entry.giveaway_id === currentGiveawayId;
   };
 
   const eligibleCount = entries.filter(isEligible).length;
@@ -295,7 +407,7 @@ const AdminGiveawayEntries = () => {
     if (isEligible(entry)) return null;
     return (
       <span
-        title="Submitted outside the giveaway window — excluded from random winner selection"
+        title="Entered under a different or no giveaway — excluded from random winner selection"
         className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-500"
       >
         Outside window
@@ -350,6 +462,29 @@ const AdminGiveawayEntries = () => {
     </div>
   );
 
+  const StatusBadge = () => {
+    if (!hasWindow) return null;
+    if (giveawayEnded) {
+      return (
+        <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
+          Ended
+        </span>
+      );
+    }
+    if (giveawayUpcoming) {
+      return (
+        <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700">
+          Upcoming
+        </span>
+      );
+    }
+    return (
+      <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-green-50 text-green-700">
+        Active
+      </span>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
@@ -378,12 +513,45 @@ const AdminGiveawayEntries = () => {
 
         {/* Giveaway window + prize settings */}
         <div className="bg-white rounded-lg shadow mb-6 px-4 sm:px-6 py-5">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-            Giveaway Settings
-          </h2>
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+              Giveaway Settings
+            </h2>
+            <StatusBadge />
+          </div>
 
           {settingsLoading ? (
             <p className="text-gray-500 text-sm">Loading settings…</p>
+          ) : giveawayEnded ? (
+            <div>
+              <div className="rounded-md bg-gray-50 border border-gray-200 px-4 py-3 mb-4">
+                <p className="text-sm text-gray-700">
+                  This giveaway ran from{' '}
+                  <span className="font-medium">{fmtDateTime(windowRange.start)}</span> to{' '}
+                  <span className="font-medium">{fmtDateTime(windowRange.end)}</span> for a prize of{' '}
+                  <span className="font-medium">
+                    ${prizeValueUsd} USD / ${prizeValueCad} CAD
+                  </span>
+                  , covering{' '}
+                  <span className="font-medium">{destinations.join(', ') || 'no destinations'}</span>.
+                </p>
+                <p className="text-xs text-gray-400 mt-2">
+                  The entry form is no longer live on the public site. Archive it to start the next giveaway.
+                </p>
+              </div>
+
+              <button
+                onClick={handleArchiveAndCreate}
+                disabled={archiving}
+                className="px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors disabled:opacity-60"
+              >
+                {archiving ? 'Archiving…' : 'Create New Giveaway'}
+              </button>
+
+              {archiveError && (
+                <p className="text-red-600 text-sm mt-3">{archiveError}</p>
+              )}
+            </div>
           ) : (
             <form onSubmit={saveSettings} className="flex flex-wrap items-end gap-4">
               <div>
@@ -483,10 +651,55 @@ const AdminGiveawayEntries = () => {
             <p className="text-red-600 text-sm mt-3">{settingsError}</p>
           )}
 
-          <p className="text-xs text-gray-400 mt-3">
-            Controls when the entry form is live on the public site, and the
-            prize amount shown there. Times are in your local timezone.
-          </p>
+          {!giveawayEnded && (
+            <p className="text-xs text-gray-400 mt-3">
+              Controls when the entry form is live on the public site, and the
+              prize amount shown there. Times are in your local timezone.
+            </p>
+          )}
+        </div>
+
+        {/* Past giveaways */}
+        <div className="bg-white rounded-lg shadow mb-6 px-4 sm:px-6 py-5">
+          <button
+            onClick={() => setHistoryOpen((v) => !v)}
+            className="w-full flex items-center justify-between text-left"
+          >
+            <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+              Past Giveaways {history.length > 0 && `(${history.length})`}
+            </span>
+            <span className="text-gray-400 text-sm">{historyOpen ? 'Hide' : 'Show'}</span>
+          </button>
+
+          {historyOpen && (
+            <div className="mt-4">
+              {historyLoading ? (
+                <p className="text-gray-500 text-sm">Loading past giveaways…</p>
+              ) : historyError ? (
+                <p className="text-red-600 text-sm">{historyError}</p>
+              ) : history.length === 0 ? (
+                <p className="text-gray-400 text-sm">Archived giveaways will show up here.</p>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {history.map((item, idx) => (
+                    <li key={item.id ?? idx} className="py-3 text-sm text-gray-700">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span>
+                          {fmtDateTime(item.startDate)} &rarr; {fmtDateTime(item.endDate)}
+                        </span>
+                        <span className="text-gray-500">
+                          ${item.prizeValueUsd} USD / ${item.prizeValueCad} CAD
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {(item.destinations || []).join(', ') || 'No destinations'} &middot; archived {fmtDateTime(item.archivedAt)}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-lg shadow overflow-hidden">
