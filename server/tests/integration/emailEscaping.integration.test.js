@@ -151,7 +151,7 @@ describe('POST /api/inquiry/notify-admin — escaping', () => {
   it('escapes a malicious name', async () => {
     await undiciFetch(`${baseUrl}/api/inquiry/notify-admin`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeader },
       body: JSON.stringify({ name: MALICIOUS, email: 'jane@example.com' }),
     });
 
@@ -162,7 +162,7 @@ describe('POST /api/inquiry/notify-admin — escaping', () => {
   it('escapes every other user-supplied field', async () => {
     await undiciFetch(`${baseUrl}/api/inquiry/notify-admin`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeader },
       body: JSON.stringify({
         name: 'Jane',
         email: MALICIOUS,
@@ -185,7 +185,7 @@ describe('POST /api/inquiry/notify-admin — escaping', () => {
     // `|| 'Not provided'` fallbacks keep working.
     await undiciFetch(`${baseUrl}/api/inquiry/notify-admin`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeader },
       body: JSON.stringify({ name: 'Jane', email: 'jane@example.com' }),
     });
 
@@ -198,7 +198,7 @@ describe('POST /api/inquiry/notify-admin — escaping', () => {
   it('leaves ordinary text readable', async () => {
     await undiciFetch(`${baseUrl}/api/inquiry/notify-admin`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeader },
       body: JSON.stringify({
         name: "Jane O'Brien",
         email: 'jane@example.com',
@@ -311,5 +311,79 @@ describe('escapeHtml helper', () => {
 
   it('leaves ordinary text untouched', () => {
     expect(escapeHtml('Anniversary trip — 2 adults')).toBe('Anniversary trip — 2 adults');
+  });
+});
+
+describe('POST /api/inquiry — server-side admin notification', () => {
+  it('emails the admin when a public booking is submitted, with no second call', async () => {
+    const res = await undiciFetch(`${baseUrl}/api/inquiry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Jane Doe', email: 'jane@example.com', destination: 'Miami' }),
+    });
+
+    expect(res.status).toBe(200);
+
+    // One public request now both stores the inquiry and notifies the admin.
+    const { rows } = await pool.query('SELECT * FROM inquiries');
+    expect(rows).toHaveLength(1);
+    expect(mailerModule.sendMail).toHaveBeenCalledTimes(1);
+    expect(mailerModule.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({ subject: 'New Booking Request from Jane Doe' })
+    );
+  });
+
+  it('escapes a malicious name in the notification it sends', async () => {
+    await undiciFetch(`${baseUrl}/api/inquiry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: MALICIOUS, email: 'jane@example.com' }),
+    });
+
+    expectEscaped(sentHtml());
+  });
+
+  it('still saves the booking when the notification email fails', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mailerModule.sendMail.mockRejectedValue(new Error('Graph API down'));
+
+    const res = await undiciFetch(`${baseUrl}/api/inquiry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Jane Doe', email: 'jane@example.com' }),
+    });
+    errorSpy.mockRestore();
+
+    // Losing a real customer's booking because email was down would be far
+    // worse than a missed notification, so the failure must not surface here.
+    expect(res.status).toBe(200);
+    const { rows } = await pool.query('SELECT * FROM inquiries');
+    expect(rows).toHaveLength(1);
+  });
+
+  it('does not email when the inquiry is rejected as invalid', async () => {
+    const res = await undiciFetch(`${baseUrl}/api/inquiry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Jane Doe', email: 'not-an-email' }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(mailerModule.sendMail).not.toHaveBeenCalled();
+    const { rows } = await pool.query('SELECT * FROM inquiries');
+    expect(rows).toHaveLength(0);
+  });
+
+  it('rejects an unauthenticated notify-admin call and sends nothing', async () => {
+    const res = await undiciFetch(`${baseUrl}/api/inquiry/notify-admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: MALICIOUS, email: 'attacker@example.com' }),
+    });
+
+    // This was a public, unauthenticated email-sending endpoint. Anyone could
+    // flood the admin inbox with attacker-written content from your domain.
+    expect(res.status).toBe(401);
+    expect(mailerModule.sendMail).not.toHaveBeenCalled();
   });
 });

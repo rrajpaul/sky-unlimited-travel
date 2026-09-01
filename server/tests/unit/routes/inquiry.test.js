@@ -43,6 +43,16 @@ mailerModule.sendMail = vi.fn();
 const { createInquiryApp } = require('../../../inquiryApp.js');
 const app = createInquiryApp();
 
+// POST /api/inquiry/notify-admin is admin-gated now (it used to be public,
+// which meant anyone could send arbitrary HTML to the admin inbox). The
+// public booking form no longer calls it at all — POST /api/inquiry sends
+// the notification server-side — but an admin can still trigger a re-send,
+// so the route keeps its tests with a real signed token.
+const jwt = require('jsonwebtoken');
+const adminAuth = {
+  Authorization: `Bearer ${jwt.sign({ username: 'test-admin' }, process.env.JWT_SECRET)}`,
+};
+
 const { pool } = dbModule;
 const { sendMail } = mailerModule;
 
@@ -166,6 +176,52 @@ describe('POST /api/inquiry', () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
+  it('notifies the admin after saving, without a second request from the client', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [] });
+
+    const res = await request(app).post('/api/inquiry').send({
+      name: 'Jane Doe',
+      email: 'jane@example.com',
+      destination: 'Miami',
+    });
+
+    expect(res.status).toBe(200);
+    // The public form used to POST to /notify-admin itself, so a browser
+    // that closed mid-submit could leave a stored booking nobody heard about.
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    expect(sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({ subject: 'New Booking Request from Jane Doe' })
+    );
+  });
+
+  it('still returns 200 when the notification email fails', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    pool.query.mockResolvedValueOnce({ rows: [] });
+    sendMail.mockRejectedValueOnce(new Error('Graph API down'));
+
+    const res = await request(app).post('/api/inquiry').send({
+      name: 'Jane Doe',
+      email: 'jane@example.com',
+    });
+    errorSpy.mockRestore();
+
+    // The inquiry is already stored at this point. Failing the request would
+    // tell a real customer their booking didn't go through when it did.
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+  });
+
+  it('does not email when the inquiry is rejected as invalid', async () => {
+    const res = await request(app).post('/api/inquiry').send({
+      name: 'Jane Doe',
+      email: 'not-an-email',
+    });
+
+    expect(res.status).toBe(400);
+    expect(sendMail).not.toHaveBeenCalled();
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
   it('returns 500 when the database insert fails', async () => {
     // The route logs 'Inquiry insert error:' on this path by design — see
     // the note above this describe block for why it's restored inline.
@@ -190,7 +246,7 @@ describe('POST /api/inquiry/notify-admin', () => {
     sendMail.mockResolvedValueOnce();
     process.env.ADMIN_EMAIL = 'admin@skyunlimitedtravel.com';
 
-    const res = await request(app).post('/api/inquiry/notify-admin').send({
+    const res = await request(app).post('/api/inquiry/notify-admin').set(adminAuth).send({
       name: 'Jane Doe',
       email: 'jane@example.com',
       phone: '555-1234',
@@ -220,7 +276,7 @@ describe('POST /api/inquiry/notify-admin', () => {
   it('falls back to placeholder text for missing optional fields', async () => {
     sendMail.mockResolvedValueOnce();
 
-    await request(app).post('/api/inquiry/notify-admin').send({
+    await request(app).post('/api/inquiry/notify-admin').set(adminAuth).send({
       name: 'Jane Doe',
       email: 'jane@example.com',
       // phone, destination, fromDate, toDate, details all omitted
@@ -232,13 +288,25 @@ describe('POST /api/inquiry/notify-admin', () => {
     expect(emailArg.html).toContain('None');           // details fallback
   });
 
+  it('rejects an unauthenticated caller and sends nothing', async () => {
+    const res = await request(app).post('/api/inquiry/notify-admin').send({
+      name: '<script>alert(1)</script>',
+      email: 'attacker@example.com',
+    });
+
+    // Previously public: anyone could flood the admin inbox with
+    // attacker-written HTML sent from your own domain.
+    expect(res.status).toBe(401);
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+
   it('returns 500 when sending the email fails', async () => {
     // The route logs 'Admin notification error:' on this path by design.
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     sendMail.mockRejectedValueOnce(new Error('SMTP timeout'));
 
-    const res = await request(app).post('/api/inquiry/notify-admin').send({
+    const res = await request(app).post('/api/inquiry/notify-admin').set(adminAuth).send({
       name: 'Jane Doe',
       email: 'jane@example.com',
     });

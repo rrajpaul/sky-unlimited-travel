@@ -212,11 +212,8 @@ describe('BookingProcessModal — navigation', () => {
 });
 
 describe('BookingProcessModal — submission', () => {
-  it('submits the form and shows the success message', async () => {
+  it('submits the form with a single request and shows the success message', async () => {
     global.fetch = vi.fn()
-      // First call: POST /api/inquiry
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
-      // Second call: POST /api/inquiry/notify-admin
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
 
     const user = userEvent.setup();
@@ -230,17 +227,34 @@ describe('BookingProcessModal — submission', () => {
       expect(screen.getByText('Thank you!')).toBeInTheDocument();
     });
 
-    expect(global.fetch).toHaveBeenCalledTimes(2);
-    expect(global.fetch).toHaveBeenNthCalledWith(
-      1,
+    // The admin notification used to be a second call from here. It's now
+    // sent server-side by POST /api/inquiry, so a customer who closes the
+    // tab mid-submit can't leave a saved booking with nobody notified —
+    // and the public notify-admin endpoint is gone.
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost/api/inquiry',
       expect.objectContaining({ method: 'POST' })
     );
-    expect(global.fetch).toHaveBeenNthCalledWith(
-      2,
-      'http://localhost/api/inquiry/notify-admin',
-      expect.objectContaining({ method: 'POST' })
-    );
+  });
+
+  it('never calls the admin-only notify-admin route', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+
+    const user = userEvent.setup();
+    await openModal(user);
+    await fillContactInfo(user);
+    await fillDestinationAndDates(user);
+    await user.click(screen.getByRole('button', { name: /submit/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Thank you!')).toBeInTheDocument();
+    });
+
+    // That route now requires an admin token, which this public form has no
+    // way to supply — calling it would 401 on every real booking.
+    const urls = global.fetch.mock.calls.map(([url]) => String(url));
+    expect(urls.some((u) => u.includes('notify-admin'))).toBe(false);
   });
 
   it('shows an error message when the inquiry request fails', async () => {
