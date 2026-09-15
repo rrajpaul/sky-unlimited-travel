@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet';
 import Navbar from '@/components/Navbar';
 import HeroSection from '@/components/HeroSection';
 import TravelSearch from '@/components/TravelSearch';
+import VacationPortSearch from '@/components/VacationPortSearch';
 import CarRentalSection from '@/components/CarRentalSection';
 import HowItWorks from '@/components/HowItWorks';
 import UnitedStatesSection from '@/components/UnitedStatesSection';
@@ -42,6 +43,7 @@ const HomePage = () => {
           <section id="giveaway" className="scroll-mt-24">
             <GiveawaySection />
           </section>
+          <VacationPortSearch />
           <TravelSearch />
           <CarRentalSection />
           <div id="destinations">
