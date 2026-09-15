@@ -39,6 +39,10 @@ None of this is optional — Graph API calls will fail without valid,
 correctly-scoped tokens, and Meta's app review process may apply if you
 move beyond your own linked assets.
 
+See [`docs/META_SETUP.md`](docs/META_SETUP.md) for a step-by-step walkthrough
+of obtaining the Facebook Page ID, long-lived Page access token, and
+Instagram Business Account ID.
+
 ## Setup
 
 ```bash
