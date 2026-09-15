@@ -49,5 +49,18 @@ export default function VacationPortSearch({ page = "/SharedPage/DefaultSearch" 
     // the DOM.
   }, []);
 
-  return <div ref={containerRef} className="nx-portable" data-page={page} />;
+  // NexCite's script swaps this div's contents for an iframe, but it only
+  // sets the iframe's width — height is set later, asynchronously, by a
+  // separate iframe-resizer script it loads on its own. Until that finishes
+  // (or if it's blocked by a CSP/ad-blocker), the iframe has no explicit
+  // height and can appear blank/invisible. A minHeight here guarantees the
+  // widget is visible immediately, and gets overridden once resizing kicks in.
+  return (
+    <div
+      ref={containerRef}
+      className="nx-portable"
+      data-page={page}
+      style={{ minHeight: 500, width: "100%" }}
+    />
+  );
 }
