@@ -40,7 +40,7 @@ const Navbar = () => {
           <img
             src="/logo.png"
             alt="Sky Unlimited Travel Logo"
-            className="h-14 w-auto rounded-full border border-white/20"
+            className="h-20 w-auto rounded-full border border-white/20"
           />
           <motion.span
             style={{ color: textColor }}
