@@ -37,11 +37,13 @@ const Navbar = () => {
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <a href="/" className="flex items-center gap-3">
-          <img
-            src="/logo.png"
-            alt="Sky Unlimited Travel Logo"
-            className="h-20 w-auto rounded-full border border-white/20"
-          />
+          <div className="h-14 w-14 rounded-full border border-white/20 overflow-hidden flex items-center justify-center">
+            <img
+              src="/logo.png"
+              alt="Sky Unlimited Travel Logo"
+              className="h-full w-full object-cover scale-[1.6]"
+            />
+          </div>
           <motion.span
             style={{ color: textColor }}
             className="font-bold text-lg hidden sm:block tracking-wide"
