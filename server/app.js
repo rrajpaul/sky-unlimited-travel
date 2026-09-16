@@ -36,6 +36,14 @@ function createApp() {
     },
   }));
 
+  // --- ADD COEP BYPASS MIDDLEWARE HERE ---
+  // This explicitly overrides any hosting provider defaults to allow cross-origin embedders
+  app.use((req, res, next) => {
+    res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless'); // Or remove entirely using res.removeHeader
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+    next();
+  });
+
   app.use(express.json());
 
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
