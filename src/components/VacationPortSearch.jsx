@@ -40,7 +40,7 @@ export default function VacationPortSearch({ page = "/SharedPage/DefaultSearch" 
         title="VacationPort Travel Search"
         style={{
           width: "100%",
-          minHeight: "400px",
+          minHeight: "300px",
           border: "none",
           borderRadius: "8px",
         }}
