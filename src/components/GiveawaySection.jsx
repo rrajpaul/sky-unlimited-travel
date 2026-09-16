@@ -259,6 +259,39 @@ const GiveawaySection = () => {
   }
 
 
+  // No active giveaway right now (none configured, settings failed to load,
+  // a future one hasn't started yet, or the current one has already ended).
+  // Show a lightweight "stay tuned" placeholder instead of a broken-looking
+  // heading with no prize amount and a hidden entry form.
+  if (giveawayStatus !== 'active') {
+    return (
+      <section
+        id="giveaway"
+        className="bg-[#1a2947] text-white pt-8 pb-10 md:pt-12 md:pb-20"
+        aria-labelledby="giveaway-heading"
+      >
+        <div className="max-w-3xl mx-auto px-6 text-center">
+          <p className="uppercase tracking-widest text-xs font-semibold text-blue-200/80 mb-2 md:mb-3">
+            Giveaway
+          </p>
+
+          <h2
+            id="giveaway-heading"
+            className="text-2xl md:text-4xl font-bold mb-3"
+          >
+            Stay tuned — we'll be announcing our next giveaway soon!
+          </h2>
+
+          <p className="text-white/70 text-sm max-w-md mx-auto">
+            Check back here, or follow us on social media, so you don't miss your
+            chance to enter when it opens.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+
   const destinationLabel = settings
     ? formatDestinationList(settings.destinations)
     : '';
@@ -301,167 +334,164 @@ const GiveawaySection = () => {
           </p>
         )}
 
-        {giveawayStatus === 'active' && (
+        {status === 'success' ? (
 
-          status === 'success' ? (
+          <div
+            role="status"
+            className="bg-white/10 border border-white/20 rounded-xl px-6 py-8 max-w-md mx-auto"
+          >
+            <p className="text-lg font-semibold mb-1">
+              You're entered! 🎉
+            </p>
 
-            <div
-              role="status"
-              className="bg-white/10 border border-white/20 rounded-xl px-6 py-8 max-w-md mx-auto"
-            >
-              <p className="text-lg font-semibold mb-1">
-                You're entered! 🎉
-              </p>
+            <p className="text-white/70 text-sm">
+              We'll email the winner directly. Good luck!
+            </p>
+          </div>
 
-              <p className="text-white/70 text-sm">
-                We'll email the winner directly. Good luck!
-              </p>
+        ) : (
+
+          <form
+            onSubmit={handleSubmit}
+            className="bg-white rounded-xl p-5 md:p-6 max-w-md mx-auto text-left shadow-lg"
+          >
+
+            <div className="mb-3">
+              <label
+                htmlFor="giveaway-name"
+                className="block text-sm font-medium text-slate-700 mb-1"
+              >
+                Full name
+              </label>
+
+              <input
+                id="giveaway-name"
+                name="name"
+                type="text"
+                required
+                value={form.name}
+                onChange={handleChange}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
+                placeholder="Jane Smith"
+              />
             </div>
 
-          ) : (
 
-            <form
-              onSubmit={handleSubmit}
-              className="bg-white rounded-xl p-5 md:p-6 max-w-md mx-auto text-left shadow-lg"
-            >
+            <div className="mb-3">
 
-              <div className="mb-3">
-                <label
-                  htmlFor="giveaway-name"
-                  className="block text-sm font-medium text-slate-700 mb-1"
-                >
-                  Full name
-                </label>
+              <label
+                htmlFor="giveaway-email"
+                className="block text-sm font-medium text-slate-700 mb-1"
+              >
+                Email address
+              </label>
 
-                <input
-                  id="giveaway-name"
-                  name="name"
-                  type="text"
-                  required
-                  value={form.name}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
-                  placeholder="Jane Smith"
-                />
-              </div>
-
-
-              <div className="mb-3">
-
-                <label
-                  htmlFor="giveaway-email"
-                  className="block text-sm font-medium text-slate-700 mb-1"
-                >
-                  Email address
-                </label>
-
-                <input
-                  id="giveaway-email"
-                  name="email"
-                  type="email"
-                  required
-                  value={form.email}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
-                  placeholder="jane@email.com"
-                />
-
-
-                {/* Honeypot */}
-                <input
-                  id="giveaway-website"
-                  name="website"
-                  type="text"
-                  value={form.website}
-                  onChange={handleChange}
-                  autoComplete="off"
-                  tabIndex="-1"
-                  aria-hidden="true"
-                  className="absolute left-[-9999px]"
-                />
-
-              </div>
-
-
-              {multipleDestinations && (
-
-                <div className="mb-4">
-
-                  <label
-                    htmlFor="giveaway-destination"
-                    className="block text-sm font-medium text-slate-700 mb-1"
-                  >
-                    Which trip are you hoping for?
-                  </label>
-
-                  <select
-                    id="giveaway-destination"
-                    name="destination"
-                    value={form.destination}
-                    onChange={handleChange}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
-                  >
-
-                    {settings.destinations.map((dest) => (
-                      <option
-                        key={dest}
-                        value={dest}
-                      >
-                        {dest}
-                      </option>
-                    ))}
-
-                    <option value="Either">
-                      Either — surprise me
-                    </option>
-
-                  </select>
-
-                </div>
-
-              )}
-
-
-              <div
-                ref={turnstileRef}
-                className="mb-4 flex justify-center [&>*]:!scale-90 [&>*]:origin-top"
+              <input
+                id="giveaway-email"
+                name="email"
+                type="email"
+                required
+                value={form.email}
+                onChange={handleChange}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
+                placeholder="jane@email.com"
               />
 
 
-              <button
-                type="submit"
-                disabled={status === 'submitting'}
-                className="w-full bg-[#1a2947] text-white font-semibold rounded-lg py-2.5 hover:bg-[#243a63] transition-colors duration-200 disabled:opacity-60"
+              {/* Honeypot */}
+              <input
+                id="giveaway-website"
+                name="website"
+                type="text"
+                value={form.website}
+                onChange={handleChange}
+                autoComplete="off"
+                tabIndex="-1"
+                aria-hidden="true"
+                className="absolute left-[-9999px]"
+              />
+
+            </div>
+
+
+            {multipleDestinations && (
+
+              <div className="mb-4">
+
+                <label
+                  htmlFor="giveaway-destination"
+                  className="block text-sm font-medium text-slate-700 mb-1"
+                >
+                  Which trip are you hoping for?
+                </label>
+
+                <select
+                  id="giveaway-destination"
+                  name="destination"
+                  value={form.destination}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1a2947]"
+                >
+
+                  {settings.destinations.map((dest) => (
+                    <option
+                      key={dest}
+                      value={dest}
+                    >
+                      {dest}
+                    </option>
+                  ))}
+
+                  <option value="Either">
+                    Either — surprise me
+                  </option>
+
+                </select>
+
+              </div>
+
+            )}
+
+
+            <div
+              ref={turnstileRef}
+              className="mb-4 flex justify-center [&>*]:!scale-90 [&>*]:origin-top"
+            />
+
+
+            <button
+              type="submit"
+              disabled={status === 'submitting'}
+              className="w-full bg-[#1a2947] text-white font-semibold rounded-lg py-2.5 hover:bg-[#243a63] transition-colors duration-200 disabled:opacity-60"
+            >
+              {status === 'submitting'
+                ? 'Entering…'
+                : 'Enter Now'}
+            </button>
+
+
+            {status === 'error' && (
+              <p
+                role="alert"
+                className="text-red-600 text-sm mt-3"
               >
-                {status === 'submitting'
-                  ? 'Entering…'
-                  : 'Enter Now'}
-              </button>
-
-
-              {status === 'error' && (
-                <p
-                  role="alert"
-                  className="text-red-600 text-sm mt-3"
-                >
-                  {errorMessage}
-                </p>
-              )}
-
-
-              <p className="text-xs text-slate-400 mt-3 text-center">
-                No purchase necessary. One entry per person. See{' '}
-                <a
-                  href="/giveaway-rules"
-                  className="underline hover:text-slate-600"
-                >
-                  official rules
-                </a>.
+                {errorMessage}
               </p>
+            )}
 
-            </form>
 
-          )
+            <p className="text-xs text-slate-400 mt-3 text-center">
+              No purchase necessary. One entry per person. See{' '}
+              <a
+                href="/giveaway-rules"
+                className="underline hover:text-slate-600"
+              >
+                official rules
+              </a>.
+            </p>
+
+          </form>
+
         )}
 
       </div>

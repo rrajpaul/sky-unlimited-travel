@@ -148,126 +148,101 @@ const AboutSection = () => {
 
       {/* ===== Meet Tasha ===== */}
       <section className="py-24 bg-slate-50">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="grid md:grid-cols-5 gap-12 items-start">
-            {/* Photo */}
-            <motion.div
-              className="md:col-span-2"
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-            >
-              <div className="sticky top-24">
-                <img
-                  src="/tasha-photo.webp"
-                  alt="Natasha Renwick, Founder of Sky Unlimited Travel"
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full aspect-[4/5] object-cover rounded-2xl shadow-lg"
-                />
-                <p className="mt-4 text-center font-bold text-[#1a2947]">
-                  Natasha Renwick
-                </p>
-                <p className="text-center text-sm text-slate-500">
-                  Founder & Travel Designer
-                </p>
-              </div>
-            </motion.div>
+        <div className="max-w-3xl mx-auto px-4">
+          {/* Bio */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <p className="text-sm font-semibold uppercase tracking-wider text-[#1a2947] opacity-60 mb-3">
+              Meet Your Travel Designer
+            </p>
+            <h2 className="text-3xl font-bold text-[#1a2947] mb-2">
+              Hi, I'm the Founder of Sky Unlimited Travel
+            </h2>
+            <p className="font-semibold text-[#1a2947] mb-6">
+              Natasha Renwick <span className="font-normal text-slate-500">— Founder & Travel Designer</span>
+            </p>
 
-            {/* Bio */}
-            <motion.div
-              className="md:col-span-3"
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-            >
-              <p className="text-sm font-semibold uppercase tracking-wider text-[#1a2947] opacity-60 mb-3">
-                Meet Your Travel Designer
+            <div className="space-y-4 text-slate-600 leading-relaxed">
+              <p>
+                Where every journey is thoughtfully designed with one goal in mind—to create
+                unforgettable travel experiences that are seamless, memorable, and completely
+                personalized.
               </p>
-              <h2 className="text-3xl font-bold text-[#1a2947] mb-6">
-                Hi, I'm the Founder of Sky Unlimited Travel
-              </h2>
+              <p>
+                Travel has been a part of my life for as long as I can remember. Growing up, I
+                watched my father explore the world simply because he had a passion for
+                discovering new places and cultures. His love for travel inspired my own, and
+                from an early age I knew that one day I wanted to help others experience the joy
+                and excitement that comes from seeing the world.
+              </p>
+              <p className="font-semibold text-[#1a2947]">
+                That passion eventually became my career.
+              </p>
+              <p>
+                With more than 15 years of hands-on experience in the travel and hospitality
+                industry, I've had the privilege of working in resorts, car rentals, travel
+                companies, and customer service before launching Sky Unlimited Travel in 2022.
+                Those experiences gave me an insider's understanding of how the travel industry
+                works and, more importantly, how to advocate for my clients before, during, and
+                after their trip.
+              </p>
+              <p>
+                Today, I proudly serve travelers as a TICO-certified Travel Designer in Canada
+                and a CLIA-certified Cruise Specialist in the United States, providing trusted
+                guidance and professional expertise every step of the way.
+              </p>
+            </div>
 
-              <div className="space-y-4 text-slate-600 leading-relaxed">
-                <p>
-                  Where every journey is thoughtfully designed with one goal in mind—to create
-                  unforgettable travel experiences that are seamless, memorable, and completely
-                  personalized.
-                </p>
-                <p>
-                  Travel has been a part of my life for as long as I can remember. Growing up, I
-                  watched my father explore the world simply because he had a passion for
-                  discovering new places and cultures. His love for travel inspired my own, and
-                  from an early age I knew that one day I wanted to help others experience the joy
-                  and excitement that comes from seeing the world.
-                </p>
-                <p className="font-semibold text-[#1a2947]">
-                  That passion eventually became my career.
-                </p>
-                <p>
-                  With more than 15 years of hands-on experience in the travel and hospitality
-                  industry, I've had the privilege of working in resorts, car rentals, travel
-                  companies, and customer service before launching Sky Unlimited Travel in 2022.
-                  Those experiences gave me an insider's understanding of how the travel industry
-                  works and, more importantly, how to advocate for my clients before, during, and
-                  after their trip.
-                </p>
-                <p>
-                  Today, I proudly serve travelers as a TICO-certified Travel Designer in Canada
-                  and a CLIA-certified Cruise Specialist in the United States, providing trusted
-                  guidance and professional expertise every step of the way.
-                </p>
+            {/* Specialties */}
+            <div className="mt-8 mb-8">
+              <h3 className="font-bold text-[#1a2947] mb-3">My Specialties</h3>
+              <div className="flex flex-wrap gap-2">
+                {tashaSpecialties.map((item) => (
+                  <span
+                    key={item}
+                    className="text-sm font-medium text-[#1a2947] bg-blue-50 rounded-full px-4 py-2"
+                  >
+                    {item}
+                  </span>
+                ))}
               </div>
+            </div>
 
-              {/* Specialties */}
-              <div className="mt-8 mb-8">
-                <h3 className="font-bold text-[#1a2947] mb-3">My Specialties</h3>
-                <div className="flex flex-wrap gap-2">
-                  {tashaSpecialties.map((item) => (
-                    <span
-                      key={item}
-                      className="text-sm font-medium text-[#1a2947] bg-blue-50 rounded-full px-4 py-2"
-                    >
-                      {item}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-4 text-slate-600 leading-relaxed">
-                <p>
-                  What truly sets me apart is that I'm not just a travel professional—I'm also an
-                  avid traveler. I've experienced both the incredible moments and the unexpected
-                  challenges that can happen while traveling. Those personal experiences allow me
-                  to prepare my clients for situations they may never think about when booking on
-                  their own.
-                </p>
-                <p>
-                  From passport and travel documentation requirements to travel insurance,
-                  airline policies, resort expectations, entry requirements, and
-                  destination-specific tips, I provide the guidance that helps eliminate surprises
-                  and gives you confidence before you leave home.
-                </p>
-                <p>
-                  I believe every vacation should be exciting—not stressful. That's why I'm
-                  committed to providing personalized service, honest advice, and ongoing support
-                  from the moment you start planning until you safely return home.
-                </p>
-                <p>
-                  When you book with Sky Unlimited Travel, you're not simply booking a
-                  vacation. You're gaining a dedicated Travel Designer who genuinely cares about
-                  your experience and treats every trip with the same level of care and attention
-                  I would expect for my own family.
-                </p>
-                <p className="font-semibold text-[#1a2947]">
-                  I love what I do, and nothing brings me greater joy than helping my clients
-                  create lifelong memories around the world.
-                </p>
-              </div>
-            </motion.div>
-          </div>
+            <div className="space-y-4 text-slate-600 leading-relaxed">
+              <p>
+                What truly sets me apart is that I'm not just a travel professional—I'm also an
+                avid traveler. I've experienced both the incredible moments and the unexpected
+                challenges that can happen while traveling. Those personal experiences allow me
+                to prepare my clients for situations they may never think about when booking on
+                their own.
+              </p>
+              <p>
+                From passport and travel documentation requirements to travel insurance,
+                airline policies, resort expectations, entry requirements, and
+                destination-specific tips, I provide the guidance that helps eliminate surprises
+                and gives you confidence before you leave home.
+              </p>
+              <p>
+                I believe every vacation should be exciting—not stressful. That's why I'm
+                committed to providing personalized service, honest advice, and ongoing support
+                from the moment you start planning until you safely return home.
+              </p>
+              <p>
+                When you book with Sky Unlimited Travel, you're not simply booking a
+                vacation. You're gaining a dedicated Travel Designer who genuinely cares about
+                your experience and treats every trip with the same level of care and attention
+                I would expect for my own family.
+              </p>
+              <p className="font-semibold text-[#1a2947]">
+                I love what I do, and nothing brings me greater joy than helping my clients
+                create lifelong memories around the world.
+              </p>
+            </div>
+          </motion.div>
         </div>
       </section>
     </>
