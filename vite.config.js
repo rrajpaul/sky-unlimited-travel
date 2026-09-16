@@ -304,11 +304,6 @@ export default defineConfig({
 			},
 		},
 	},
-	preview: {
-		headers: {
-			'Cross-Origin-Embedder-Policy': 'credentialless',
-		},
-	},
 	resolve: {
 		extensions: ['.jsx', '.js', '.tsx', '.ts', '.json', ],
 		alias: {
