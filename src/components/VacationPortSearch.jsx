@@ -27,8 +27,8 @@ export default function VacationPortSearch({ page = "/SharedPage/DefaultSearch" 
     
     // ==========================================
     // ADD THESE TWO LINES TO RESOLVE THE COEP ERROR:
-    script.setAttribute("crossorigin", "anonymous");
-    script.crossOrigin = "anonymous";
+    //script.setAttribute("crossorigin", "anonymous");
+    //script.crossOrigin = "anonymous";
     // ==========================================
     
     document.body.appendChild(script);
