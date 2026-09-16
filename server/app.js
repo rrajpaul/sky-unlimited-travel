@@ -36,11 +36,16 @@ function createApp() {
     },
   }));
 
-  // --- ADD COEP BYPASS MIDDLEWARE HERE ---
-  // This explicitly overrides any hosting provider defaults to allow cross-origin embedders
   app.use((req, res, next) => {
-    res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless'); // Or remove entirely using res.removeHeader
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+    // Completely strip out the cross-origin isolation headers from every response
+    res.removeHeader('Cross-Origin-Embedder-Policy');
+    res.removeHeader('Cross-Origin-Opener-Policy');
+    res.removeHeader('Cross-Origin-Resource-Policy');
+    
+    // Alternative fallback: explicitly set them to completely un-isolated values
+    res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+    res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     next();
   });
 
