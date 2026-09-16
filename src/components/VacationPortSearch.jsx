@@ -1,60 +1,33 @@
-import { useEffect, useState } from "react";
-
-const SCRIPT_SRC = "https://skyunlimitedtravel.vacationport.net/Info/Portable";
-const SCRIPT_ID = "nexcite-connect-portable-script";
+import { useState } from "react";
 
 export default function VacationPortSearch({ page = "/SharedPage/DefaultSearch" }) {
   const [loadKey, setLoadKey] = useState(0);
 
-  useEffect(() => {
-    // 1. Remove any old, stalled instance of the script first
-    const existingScript = document.getElementById(SCRIPT_ID);
-    if (existingScript) {
-      existingScript.remove();
-    }
-
-    // 2. Also remove any stale iframes left behind by broken previous page transitions
-    const oldIframe = document.querySelector('iframe[id^="iFrameResizer"]');
-    if (oldIframe) {
-      oldIframe.remove();
-    }
-
-    // 3. Dynamically build and append a fresh copy of the script
-    const script = document.createElement("script");
-    script.id = SCRIPT_ID;
-    script.src = `${SCRIPT_SRC}?v=${Date.now()}`; // Query string defeats aggressive browser caching
-    script.async = true;
-    
-    // ==========================================
-    // ADD THESE TWO LINES TO RESOLVE THE COEP ERROR:
-    //script.setAttribute("crossorigin", "anonymous");
-    //script.crossOrigin = "anonymous";
-    // ==========================================
-    
-    document.body.appendChild(script);
-
-    // 4. Cleanup function: Clean the script out of the DOM if the user navigates away
-    return () => {
-      const scriptToClean = document.getElementById(SCRIPT_ID);
-      if (scriptToClean) scriptToClean.remove();
-    };
-  }, [page, loadKey]);
+  // Safely construct the direct URL targeting the standalone VacationPort search frame
+  const frameSrc = `https://vacationport.net${page}?noscroll=true&v=${loadKey}`;
 
   return (
     <div style={{ width: "100%", textAlign: "center" }}>
-      <div
-        className="nx-portable"
-        data-page={page}
-        style={{ minHeight: "600px", width: "100%" }}
-        // Optional addition to ensure sub-iframe generation respects anonymity limits
-        crossOrigin="anonymous" 
+      <iframe
+        key={loadKey}
+        src={frameSrc}
+        title="VacationPort Travel Search"
+        style={{
+          width: "100%",
+          minHeight: "750px", // High baseline height ensures layout is visible immediately
+          border: "none",
+          borderRadius: "8px",
+        }}
+        // Standard sandbox rules allow forms and operations without cross-origin dependency leaks
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
       />
-      {/* If a timeout happens, this button provides an instant manual restart fallback */}
+
+      {/* Manual recovery option remains in case network drops */}
       <button 
         onClick={() => setLoadKey(prev => prev + 1)}
-        style={{ marginTop: "10px", padding: "5px 10px", fontSize: "12px", opacity: 0.6 }}
+        style={{ marginTop: "10px", padding: "5px 10px", fontSize: "12px", opacity: 0.6, cursor: "pointer" }}
       >
-        Widget not loading? Reload Search Portal
+        Widget not loading? Reset Search Frame
       </button>
     </div>
   );
