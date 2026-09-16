@@ -25,6 +25,12 @@ export default function VacationPortSearch({ page = "/SharedPage/DefaultSearch" 
     script.src = `${SCRIPT_SRC}?v=${Date.now()}`; // Query string defeats aggressive browser caching
     script.async = true;
     
+    // ==========================================
+    // ADD THESE TWO LINES TO RESOLVE THE COEP ERROR:
+    script.setAttribute("crossorigin", "anonymous");
+    script.crossOrigin = "anonymous";
+    // ==========================================
+    
     document.body.appendChild(script);
 
     // 4. Cleanup function: Clean the script out of the DOM if the user navigates away
@@ -40,6 +46,8 @@ export default function VacationPortSearch({ page = "/SharedPage/DefaultSearch" 
         className="nx-portable"
         data-page={page}
         style={{ minHeight: "600px", width: "100%" }}
+        // Optional addition to ensure sub-iframe generation respects anonymity limits
+        crossOrigin="anonymous" 
       />
       {/* If a timeout happens, this button provides an instant manual restart fallback */}
       <button 
