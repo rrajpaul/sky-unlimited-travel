@@ -109,8 +109,6 @@ const ContactSection = () => {
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.4 }}
         >
-          <p className="text-lg mb-2">Natasha Renwick</p>
-          
           <a  href="mailto:info@skyunlimitedtravel.com"
             className="text-blue-300 hover:text-blue-200 transition-colors duration-300"
           >
