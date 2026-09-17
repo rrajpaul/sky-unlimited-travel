@@ -163,7 +163,7 @@ const AboutSection = () => {
               Hi, I'm the Founder of Sky Unlimited Travel
             </h2>
             <p className="font-semibold text-[#1a2947] mb-6">
-              Natasha Renwick <span className="font-normal text-slate-500">— Founder & Travel Designer</span>
+              Natasha R <span className="font-normal text-slate-500">— Founder & Travel Designer</span>
             </p>
             <p className="font-semibold text-[#1a2947] mb-6">
               R Renwick <span className="font-normal text-slate-500">— Co Founder & Travel Designer</span>
