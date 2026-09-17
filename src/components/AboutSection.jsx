@@ -165,10 +165,6 @@ const AboutSection = () => {
             <p className="font-semibold text-[#1a2947] mb-6">
               Natasha R <span className="font-normal text-slate-500">— Founder & Travel Designer</span>
             </p>
-            <p className="font-semibold text-[#1a2947] mb-6">
-              R Renwick <span className="font-normal text-slate-500">— Co Founder & Travel Designer</span>
-            </p>
-
             <div className="space-y-4 text-slate-600 leading-relaxed">
               <p>
                 Where every journey is thoughtfully designed with one goal in mind—to create
