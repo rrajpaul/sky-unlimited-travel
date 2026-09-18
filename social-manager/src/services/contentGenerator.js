@@ -1,7 +1,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { config, assertConfigured } = require('../config');
 
-const POST_TYPES = ['travel_quote', 'travel_tip', 'destination_spotlight'];
+const POST_TYPES = ['travel_quote', 'travel_tip', 'destination_spotlight', 'illustration', 'checklist'];
 
 /**
  * Picks a post type for today. Rotates through types based on the day of
@@ -21,22 +21,63 @@ function buildPrompt(postType) {
   const shared = `You are writing a single social media post for ${name}, a travel
 agency (${tagline}). The post will be shared on Facebook and Instagram.
 
-Respond with ONLY a JSON object, no markdown fences, no preamble, in this
-exact shape:
+Respond with ONLY a JSON object, no markdown fences, no preamble.`;
+
+  const byType = {
+    travel_quote: `${shared} Use this exact shape:
 {
   "headline": "short punchy line for the image, under 12 words",
   "caption": "the full social caption, 2-4 sentences, warm and inviting, ending with 2-4 relevant hashtags",
   "image_theme": "one of: beach, mountains, city-skyline, airplane, tropical, roadtrip"
-}`;
+}
 
-  const byType = {
-    travel_quote: `${shared}\n\nMake the headline an original, inspiring travel quote (not a famous
+Make the headline an original, inspiring travel quote (not a famous
 person's real quote — write your own). Do not attribute it to anyone.`,
-    travel_tip: `${shared}\n\nMake the headline a short, genuinely useful travel tip (packing, booking,
+
+    travel_tip: `${shared} Use this exact shape:
+{
+  "headline": "short punchy line for the image, under 12 words",
+  "caption": "the full social caption, 2-4 sentences, warm and inviting, ending with 2-4 relevant hashtags",
+  "image_theme": "one of: beach, mountains, city-skyline, airplane, tropical, roadtrip"
+}
+
+Make the headline a short, genuinely useful travel tip (packing, booking,
 airports, or destinations). The caption should expand on the tip briefly.`,
-    destination_spotlight: `${shared}\n\nMake the headline name a specific real destination (e.g. a city or region
+
+    destination_spotlight: `${shared} Use this exact shape:
+{
+  "headline": "short punchy line for the image, under 12 words",
+  "caption": "the full social caption, 2-4 sentences, warm and inviting, ending with 2-4 relevant hashtags",
+  "image_theme": "one of: beach, mountains, city-skyline, airplane, tropical, roadtrip"
+}
+
+Make the headline name a specific real destination (e.g. a city or region
 in the US, Canada, Europe, the Caribbean, or Mexico) with an evocative
 adjective. The caption should describe why it's worth visiting.`,
+
+    illustration: `${shared} Use this exact shape:
+{
+  "headline": "a short, punchy phrase for a simple illustrated graphic, under 8 words",
+  "caption": "the full social caption, 2-4 sentences, warm and inviting, ending with 2-4 relevant hashtags",
+  "image_theme": "one of: beach, mountains, city-skyline, airplane, tropical, roadtrip"
+}
+
+This will accompany a simple flat-design illustration (not a photo), so keep
+the headline light and evocative rather than detailed — something like a
+short mood or call-to-action line that fits a minimal graphic.`,
+
+    checklist: `${shared} Use this exact shape:
+{
+  "headline": "a title for a short checklist/tips graphic, under 8 words, e.g. '5 Tips for Packing Light'",
+  "items": ["3 to 5 short, genuinely useful tips, each under 12 words"],
+  "caption": "the full social caption, 2-4 sentences, warm and inviting, ending with 2-4 relevant hashtags",
+  "image_theme": "one of: beach, mountains, city-skyline, airplane, tropical, roadtrip"
+}
+
+Pick ONE clear, specific topic for the checklist (packing for a cruise,
+booking flights on a budget, first-time passport tips, what to pack for a
+beach trip, etc.) and write genuinely useful, specific items — not vague
+platitudes.`,
   };
 
   return byType[postType];
@@ -50,7 +91,7 @@ async function generatePost({ postType } = {}) {
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-5',
-    max_tokens: 400,
+    max_tokens: 500,
     messages: [{ role: 'user', content: buildPrompt(type) }],
   });
 
@@ -71,6 +112,10 @@ async function generatePost({ postType } = {}) {
 
   if (!parsed.headline || !parsed.caption) {
     throw new Error(`AI content missing required fields. Got: ${JSON.stringify(parsed)}`);
+  }
+
+  if (type === 'checklist' && (!Array.isArray(parsed.items) || parsed.items.length === 0)) {
+    throw new Error(`Checklist post missing "items" array. Got: ${JSON.stringify(parsed)}`);
   }
 
   return { postType: type, ...parsed };

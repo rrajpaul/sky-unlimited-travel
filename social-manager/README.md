@@ -7,10 +7,22 @@ Instagram Business account — fully automatically.
 
 ## What it does
 
-1. **Generate** — Calls Claude to write a short headline + caption (rotates
-   daily between a travel quote, a travel tip, and a destination spotlight).
-2. **Render** — Draws that headline onto a branded 1080x1080 gradient card
-   (no external image APIs or stock photo licensing needed).
+1. **Generate** — Calls Claude to write post content. Rotates through five
+   post types: a travel quote, a travel tip, a destination spotlight, a
+   simple illustration-style post, and a checklist/tips infographic.
+2. **Render** — Turns that content into a branded square image, using
+   whichever style fits the post type:
+   - **Quote / tip / spotlight** — either the original branded gradient
+     card, or (if you've added photos to `assets/photos/`) one of your own
+     photos with the headline overlaid in a legible dark scrim at the
+     bottom. When photos are available, there's a 60% chance any given
+     quote/tip/spotlight post uses a real photo instead of the gradient —
+     see `PHOTO_CARD_PROBABILITY` in `postJob.js` to adjust that.
+   - **Illustration** — a simple flat-design scene (palm trees, mountains,
+     a city skyline, a plane, a road trip car — matching the AI-picked
+     theme) with a short headline.
+   - **Checklist** — a titled list of 3–5 tips with checkmark bullets,
+     e.g. "5 Tips for Packing Light."
 3. **Publish** — Posts the image + caption to your Facebook Page, then to
    your linked Instagram Business account via the Graph API's two-step
    media container flow.
@@ -18,6 +30,23 @@ Instagram Business account — fully automatically.
 
 Runs once daily on a cron schedule (default 9:00 AM), plus you can trigger a
 post manually or preview one without publishing.
+
+## Adding your own photos
+
+Drop image files (`.jpg`, `.jpeg`, `.png`, or `.webp`) into `assets/photos/`.
+No naming convention or manifest needed — the app picks a random one each
+time a quote/tip/spotlight post uses the photo-card style. You can add all
+~200 at once, or a few at a time; the library just needs to be non-empty to
+start getting used.
+
+Check `GET /api/photos` at any time to see how many photos are currently
+loaded and their filenames — handy for confirming an upload actually landed
+in the right place.
+
+The folder starts empty; until it has at least one photo, quote/tip/
+spotlight posts always use the gradient card (the illustration and
+checklist post types don't need photos at all, so those work from day one
+regardless).
 
 ## Requirements before this can actually post
 
@@ -39,10 +68,6 @@ None of this is optional — Graph API calls will fail without valid,
 correctly-scoped tokens, and Meta's app review process may apply if you
 move beyond your own linked assets.
 
-See [`docs/META_SETUP.md`](docs/META_SETUP.md) for a step-by-step walkthrough
-of obtaining the Facebook Page ID, long-lived Page access token, and
-Instagram Business Account ID.
-
 ## Setup
 
 ```bash
@@ -61,6 +86,7 @@ npm start
 | POST   | `/api/preview`  | Generate content + image, but do NOT post — good for a sanity check |
 | POST   | `/api/post-now` | Generate and immediately publish to Facebook + Instagram          |
 | GET    | `/api/history?limit=30` | Recent post history (including any errors)                |
+| GET    | `/api/photos`   | How many photos are currently loaded in assets/photos, and their filenames |
 
 ## Configuring the schedule
 
