@@ -71,8 +71,8 @@ async function renderPostImage(post, { dryRun } = {}) {
  * `dryRun: true` generates content + image but skips actually posting —
  * useful for the /preview endpoint.
  */
-async function runDailyPost({ dryRun = false } = {}) {
-  const post = await generatePost();
+async function runDailyPost({ dryRun = false, slot = 1 } = {}) {
+  const post = await generatePost({ slot });
   const image = await renderPostImage(post, { dryRun });
 
   if (!image.publicUrl && !dryRun) {

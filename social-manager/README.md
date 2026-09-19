@@ -28,7 +28,8 @@ Instagram Business account — fully automatically.
    media container flow.
 4. **Log** — Every run (success or failure) is appended to `data/history.json`.
 
-Runs once daily on a cron schedule (default 9:00 AM), plus you can trigger a
+Runs once or twice daily on a cron schedule (default: 11:00 AM and 7:00 PM),
+plus you can trigger a
 post manually or preview one without publishing.
 
 ## Adding your own photos
@@ -100,7 +101,17 @@ npm start
 ## Configuring the schedule
 
 Edit `POST_CRON` in `.env` (standard 5-field cron syntax) and `TIMEZONE`.
-Default is `0 9 * * *` — once daily at 9:00 AM in `America/New_York`.
+Default is `0 11 * * *` — 11:00 AM in `America/New_York`, chosen as a
+reasonable overlap between Facebook's and Instagram's peak engagement
+windows.
+
+Set `POST_CRON_2` to run a **second, independent post** at a different time
+each day — e.g. the default `0 19 * * *` (7:00 PM) targets Instagram's
+stronger evening peak, complementing `POST_CRON`'s Facebook-friendly morning
+slot. Each scheduled time generates its own content and picks its own post
+type (quote/tip/spotlight/illustration/checklist) — they're never
+duplicates of each other. Leave `POST_CRON_2` blank (`POST_CRON_2=`) to go
+back to posting once per day.
 
 ## Notes / things to decide before going live
 

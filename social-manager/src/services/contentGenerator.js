@@ -4,15 +4,17 @@ const { config, assertConfigured } = require('../config');
 const POST_TYPES = ['travel_quote', 'travel_tip', 'destination_spotlight', 'illustration', 'checklist'];
 
 /**
- * Picks a post type for today. Rotates through types based on the day of
- * year so the feed doesn't feel repetitive, without needing any external
- * state.
+ * Picks a post type for a given day + slot. Rotates through types based on
+ * the day of year, offset by slot so multiple posts on the same day get
+ * different types instead of all repeating the same style — e.g. slot 1
+ * might land on "checklist" while slot 2 lands on "travel_tip", rather than
+ * both being "checklist" just because they ran on the same date.
  */
-function pickPostType(date = new Date()) {
+function pickPostType(date = new Date(), slot = 1) {
   const dayOfYear = Math.floor(
     (date - new Date(date.getFullYear(), 0, 0)) / 86400000
   );
-  return POST_TYPES[dayOfYear % POST_TYPES.length];
+  return POST_TYPES[(dayOfYear + (slot - 1)) % POST_TYPES.length];
 }
 
 function buildPrompt(postType) {
@@ -83,9 +85,9 @@ platitudes.`,
   return byType[postType];
 }
 
-async function generatePost({ postType } = {}) {
+async function generatePost({ postType, slot = 1 } = {}) {
   assertConfigured(['anthropicApiKey']);
-  const type = postType || pickPostType();
+  const type = postType || pickPostType(new Date(), slot);
 
   const client = new Anthropic({ apiKey: config.anthropicApiKey });
 

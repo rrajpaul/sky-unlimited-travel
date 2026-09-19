@@ -21,7 +21,18 @@ const config = {
   fbPageAccessToken: required('FB_PAGE_ACCESS_TOKEN'),
   igBusinessAccountId: required('IG_BUSINESS_ACCOUNT_ID'),
 
-  postCron: process.env.POST_CRON || '0 9 * * *',
+  // Cron times for each scheduled post. POST_CRON is always used; POST_CRON_2
+  // is optional — set it to run a second post at a different time each day
+  // (e.g. one post timed for Facebook's morning peak, another for
+  // Instagram's evening peak). Empty/unset means single-post-per-day, same
+  // as before.
+  postCron: process.env.POST_CRON || '0 11 * * *',
+  // Distinguish "not set at all" (use the default) from "explicitly set to
+  // empty" (disable the second post) — a plain `|| fallback` can't tell
+  // these apart, since an empty string is falsy in JS and would silently
+  // fall back to the default even when someone deliberately blanked it out.
+  postCron2:
+    process.env.POST_CRON_2 === undefined ? '0 19 * * *' : process.env.POST_CRON_2,
   timezone: process.env.TIMEZONE || 'America/New_York',
 
   brand: {
