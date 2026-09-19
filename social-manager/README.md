@@ -34,10 +34,19 @@ post manually or preview one without publishing.
 ## Adding your own photos
 
 Drop image files (`.jpg`, `.jpeg`, `.png`, or `.webp`) into `assets/photos/`.
-No naming convention or manifest needed — the app picks a random one each
-time a quote/tip/spotlight post uses the photo-card style. You can add all
-~200 at once, or a few at a time; the library just needs to be non-empty to
-start getting used.
+No naming convention or manifest needed — the app works through them one at
+a time, in alphabetical filename order, and wraps back to the start once it
+reaches the end. Progress is saved to `data/photo-cursor.json`, so restarts
+(e.g. a Railway redeploy) resume from where they left off rather than
+starting over. You can add all ~200 at once, or a few at a time; the library
+just needs to be non-empty to start getting used.
+
+Note: ordering is by *filename*, not by when a file was added or its
+modification time — file timestamps typically get reset to the same value
+during a git-based deploy, making time-based ordering unreliable in
+production. If you want photos to post in a specific order, name them so
+they sort the way you want alphabetically (e.g. `01-beach.jpg`,
+`02-mountains.jpg`).
 
 Check `GET /api/photos` at any time to see how many photos are currently
 loaded and their filenames — handy for confirming an upload actually landed
