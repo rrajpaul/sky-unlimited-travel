@@ -57,6 +57,25 @@ const AdminGiveawayEntries = () => {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Past giveaway currently shown in the entries popup (null = closed).
+  const [viewGiveaway, setViewGiveaway] = useState(null);
+
+  // Entries already carry giveaway_id, so no extra API call is needed.
+  // Winner first, then newest first (entries are already sorted newest first).
+  const viewEntries = viewGiveaway
+    ? entries
+        .filter((e) => e.giveaway_id === viewGiveaway.id)
+        .sort((a, b) => Number(b.is_winner) - Number(a.is_winner))
+    : [];
+
+  useEffect(() => {
+    if (!viewGiveaway) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setViewGiveaway(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [viewGiveaway]);
 
   const now = new Date();
   const hasWindow = Boolean(windowRange.start && windowRange.end);
@@ -747,6 +766,13 @@ const AdminGiveawayEntries = () => {
                       <div className="text-xs text-gray-400 mt-1">
                         {(item.destinations || []).join(', ') || 'No destinations'} &middot; archived {fmtDateTime(item.archivedAt)}
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setViewGiveaway(item)}
+                        className="mt-2 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                      >
+                        View entries ({entries.filter((e) => e.giveaway_id === item.id).length})
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -911,6 +937,78 @@ const AdminGiveawayEntries = () => {
 
         </div>
       </div>
+
+      {/* Past giveaway entries popup */}
+      {viewGiveaway && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setViewGiveaway(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Giveaway entries"
+            className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-gray-200">
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-gray-900">
+                  Entries ({viewEntries.length})
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {fmtDateTime(viewGiveaway.startDate)} &rarr; {fmtDateTime(viewGiveaway.endDate)}
+                  {' '}&middot; {(viewGiveaway.destinations || []).join(', ') || 'No destinations'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewGiveaway(null)}
+                aria-label="Close"
+                className="text-gray-400 hover:text-gray-700 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="overflow-y-auto">
+              {viewEntries.length === 0 ? (
+                <p className="p-5 text-sm text-gray-500">
+                  No entries were recorded for this giveaway.
+                </p>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {viewEntries.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className={`px-5 py-3 flex items-center justify-between gap-3 ${
+                        entry.is_winner ? 'bg-amber-50' : ''
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {entry.name}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">{entry.email}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {entry.is_winner && (
+                          <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-green-50 text-green-700">
+                            Winner
+                          </span>
+                        )}
+                        <span className="text-xs text-gray-400">
+                          {new Date(entry.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
