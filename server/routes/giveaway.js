@@ -7,9 +7,10 @@ const { sendMail } = require('../utils/mailer');
 const { escapeHtml } = require('../utils/escapeHtml');
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// The full set of destinations this feature supports choosing from.
-// Add new ones here if you expand beyond Bahamas/Jamaica later.
-const ALLOWED_DESTINATIONS = ['Bahamas', 'Jamaica'];
+// Every country a giveaway can be set to. A giveaway has exactly one
+// destination. Keep utils/countries.js in sync with src/lib/countries.js
+// on the frontend.
+const { ALL_COUNTRIES: ALLOWED_DESTINATIONS } = require('../utils/countries');
 
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY;
 
@@ -72,7 +73,7 @@ async function getCurrentGiveaway() {
 
 // GET current giveaway settings (public — the site's GiveawaySection reads
 // this on load to decide whether to show "coming soon", the form, or
-// "ended", what prize amount to display, and which destination(s) to offer)
+// "ended", what prize amount to display, and which destination to offer)
 router.get('/settings', async (req, res) => {
   try {
     const g = await getCurrentGiveaway();
@@ -113,12 +114,11 @@ router.patch('/settings', requireAdmin, async (req, res) => {
   if (isNaN(usd) || usd <= 0 || isNaN(cad) || cad <= 0) {
     return res.status(400).json({ error: 'Prize values must be positive numbers.' });
   }
-  if (!Array.isArray(destinations) || destinations.length === 0) {
-    return res.status(400).json({ error: 'Select at least one destination.' });
+  if (!Array.isArray(destinations) || destinations.length !== 1) {
+    return res.status(400).json({ error: 'Select exactly one destination.' });
   }
-  const invalid = destinations.filter((d) => !ALLOWED_DESTINATIONS.includes(d));
-  if (invalid.length > 0) {
-    return res.status(400).json({ error: `Invalid destination(s): ${invalid.join(', ')}` });
+  if (!ALLOWED_DESTINATIONS.includes(destinations[0])) {
+    return res.status(400).json({ error: `Invalid destination: ${destinations[0]}` });
   }
 
   try {
@@ -304,18 +304,15 @@ router.post('/', giveawayLimiter, async (req, res) => {
     return res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 
-  // Build the allowed set from the active giveaway: its destinations, plus
-  // "Either" only if more than one destination is currently offered.
-  const activeDestinations = giveaway?.destinations?.length ? giveaway.destinations : ALLOWED_DESTINATIONS;
-  const allowedForEntry = activeDestinations.length > 1
-    ? [...activeDestinations, 'Either']
-    : activeDestinations;
+  const activeDestinations = giveaway?.destinations?.length ? giveaway.destinations : [];
 
-  // If there's only one active destination, force it regardless of what was
-  // submitted — there's no real choice to make in that case.
+  // One active destination: force it regardless of what was submitted —
+  // there's no real choice to make. No giveaway configured: accept a valid
+  // country from the form, otherwise store null. (If giveaway_entries.destination
+  // is NOT NULL, swap null for a placeholder such as 'Unspecified'.)
   const safeDestination = activeDestinations.length === 1
     ? activeDestinations[0]
-    : (allowedForEntry.includes(destination) ? destination : activeDestinations[0]);
+    : (ALLOWED_DESTINATIONS.includes(destination) ? destination : null);
 
   try {
     // Prevent the same email entering more than once

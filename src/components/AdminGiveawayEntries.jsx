@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiUrl } from '@/lib/api';
+import { ALL_COUNTRIES } from '@/lib/countries';
 
 function getToken() {
   return localStorage.getItem('adminToken');
@@ -20,7 +21,6 @@ function fmtDateTime(value) {
 }
 
 // Keep in sync with ALLOWED_DESTINATIONS in routes/giveaway.js
-const ALL_DESTINATIONS = ['Bahamas', 'Jamaica'];
 
 const AdminGiveawayEntries = () => {
   const [entries, setEntries] = useState([]);
@@ -37,6 +37,7 @@ const AdminGiveawayEntries = () => {
   const [prizeValueUsd, setPrizeValueUsd] = useState('');
   const [prizeValueCad, setPrizeValueCad] = useState('');
   const [destinations, setDestinations] = useState([]);
+  const [destSearch, setDestSearch] = useState('');
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState('');
@@ -203,6 +204,7 @@ const AdminGiveawayEntries = () => {
       setPrizeValueUsd('');
       setPrizeValueCad('');
       setDestinations([]);
+      setDestSearch('');
       setWindowRange({ start: null, end: null });
       setCurrentGiveawayId(null);
 
@@ -214,11 +216,15 @@ const AdminGiveawayEntries = () => {
     }
   };
 
-  const toggleDestination = (dest) => {
-    setDestinations((prev) =>
-      prev.includes(dest) ? prev.filter((d) => d !== dest) : [...prev, dest]
-    );
+  // Single selection: picking a country replaces any previous choice.
+  // Still stored as a one-item array so the API payload shape is unchanged.
+  const selectDestination = (dest) => {
+    setDestinations([dest]);
   };
+
+  const visibleCountries = ALL_COUNTRIES.filter((c) =>
+    c.toLowerCase().includes(destSearch.trim().toLowerCase())
+  );
 
   // --- Entries ---
   const loadEntries = async () => {
@@ -612,22 +618,69 @@ const AdminGiveawayEntries = () => {
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Destinations
-                </label>
-                <div className="flex gap-3 pt-1.5">
-                  {ALL_DESTINATIONS.map((dest) => (
-                    <label key={dest} className="flex items-center gap-1.5 text-sm text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={destinations.includes(dest)}
-                        onChange={() => toggleDestination(dest)}
-                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      {dest}
-                    </label>
-                  ))}
+
+              {/* Destinations: searchable checklist (no dropdown) */}
+              <div className="w-full sm:w-80">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-600">
+                    Destination
+                  </label>
+                  {destinations.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setDestinations([])}
+                      className="text-xs text-indigo-600 hover:text-indigo-800"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {destinations.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-50 text-indigo-700">
+                      {destinations[0]}
+                      <button
+                        type="button"
+                        onClick={() => setDestinations([])}
+                        aria-label={`Remove ${destinations[0]}`}
+                        className="text-indigo-400 hover:text-indigo-700"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  </div>
+                )}
+
+                <div className="rounded-md border border-gray-300 bg-white shadow-sm">
+                  <input
+                    type="text"
+                    value={destSearch}
+                    onChange={(e) => setDestSearch(e.target.value)}
+                    placeholder="Filter countries…"
+                    className="w-full rounded-t-md border-0 border-b border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-0"
+                  />
+                  <div className="max-h-40 overflow-y-auto py-1">
+                    {visibleCountries.length === 0 ? (
+                      <p className="px-3 py-2 text-sm text-gray-400">No matches</p>
+                    ) : (
+                      visibleCountries.map((c) => (
+                        <label
+                          key={c}
+                          className="flex items-center gap-2 px-3 py-1 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+                        >
+                          <input
+                            type="radio"
+                            name="destination"
+                            checked={destinations[0] === c}
+                            onChange={() => selectDestination(c)}
+                            className="border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          {c}
+                        </label>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -642,7 +695,7 @@ const AdminGiveawayEntries = () => {
                 <span className="text-sm text-green-600 font-medium">Saved ✓</span>
               )}
               {destinations.length === 0 && (
-                <span className="text-sm text-red-500">Select at least one destination</span>
+                <span className="text-sm text-red-500">Select a destination</span>
               )}
             </form>
           )}
