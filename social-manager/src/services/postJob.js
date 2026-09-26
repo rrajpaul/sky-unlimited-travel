@@ -5,7 +5,7 @@ const {
   generateIllustrationCard,
   generateChecklistCard,
 } = require('./imageGenerator');
-const { pickNextPhotoForTheme, listPhotosForTheme, listPhotos } = require('./photoLibrary');
+const { pickNextPhoto, listPhotos } = require('./photoLibrary');
 const { postToFacebook } = require('./facebookService');
 const { postToInstagram } = require('./instagramService');
 const { appendHistory } = require('./historyStore');
@@ -43,26 +43,22 @@ async function renderPostImage(post, { dryRun } = {}) {
 
   // travel_quote / travel_tip / destination_spotlight: use a real photo as
   // the background when the library has one and the dice roll says so,
-  // otherwise fall back to the original gradient card. The photo is matched
-  // to the post's image_theme (beach/mountains/city-skyline/airplane/
-  // tropical/roadtrip) using filename keywords — see photoLibrary's
-  // THEME_KEYWORDS — so a post about a city doesn't end up captioned over a
-  // random beach photo. Each theme rotates through its own matching photos
-  // in order (not randomly), so that subset gets used evenly over time. The
-  // coin flip happens BEFORE advancing the cursor, so a photo is only
-  // marked "used" when it's actually going to be rendered — not on every
-  // call regardless of outcome.
+  // otherwise fall back to the original gradient card. Photos are picked in
+  // alphabetical order, one after another (not randomly), so the whole
+  // library gets used evenly over time rather than some photos repeating
+  // while others never come up. These post types are deliberately written
+  // (see contentGenerator.js) to never require a specific matching photo —
+  // any travel photo works under a generic quote/tip, and
+  // destination_spotlight avoids naming an exact real place — so plain
+  // rotation never risks a caption/photo mismatch. The coin flip happens
+  // BEFORE advancing the cursor, so a photo is only marked "used" when it's
+  // actually going to be rendered — not on every call regardless of
+  // outcome.
   const photos = await listPhotos();
   const usePhoto = photos.length > 0 && Math.random() < PHOTO_CARD_PROBABILITY;
 
   if (usePhoto) {
-    let photoPath;
-    if (dryRun) {
-      const candidates = await listPhotosForTheme(post.image_theme);
-      photoPath = candidates[0];
-    } else {
-      photoPath = await pickNextPhotoForTheme(post.image_theme);
-    }
+    const photoPath = dryRun ? photos[0] : await pickNextPhoto();
     return generatePhotoCard({ headline: post.headline, photoPath });
   }
 

@@ -53,9 +53,14 @@ airports, or destinations). The caption should expand on the tip briefly.`,
   "image_theme": "one of: beach, mountains, city-skyline, airplane, tropical, roadtrip"
 }
 
-Make the headline name a specific real destination (e.g. a city or region
-in the US, Canada, Europe, the Caribbean, or Mexico) with an evocative
-adjective. The caption should describe why it's worth visiting.`,
+Write about the FEELING or EXPERIENCE of a great trip — a "hidden gem"
+mood, a moment of wonder, a sense of escape — rather than naming one
+specific real city, landmark, or country. Since the accompanying photo is
+picked independently and may not literally depict wherever you describe,
+avoid headlines like "Discover Santorini" or "Streets of Old Quebec" that
+promise a specific place; write something evocative enough to work under
+any beautiful travel photo instead, e.g. "Somewhere Worth Getting Lost In"
+or "Your Next Great Escape Is Waiting".`,
 
     illustration: `${shared} Use this exact shape:
 {
