@@ -74,12 +74,23 @@ async function listPhotosForTheme(theme) {
   const keywords = THEME_KEYWORDS[theme];
   if (!keywords || photos.length === 0) return photos;
 
-  const allKeywords = [...keywords, ...GENERAL_KEYWORDS];
-  const matched = photos.filter((p) => {
-    const name = path.basename(p).toLowerCase();
-    return allKeywords.some((kw) => name.includes(kw));
-  });
+  // Split into two tiers so a genuinely on-theme word (e.g. "tropical")
+  // always outranks a merely generic one (e.g. "travel") — without this,
+  // alphabetical order alone could put a vaguely-generic photo ahead of a
+  // clearly on-theme one just because its filename happens to sort first.
+  const specific = [];
+  const generalOnly = [];
 
+  for (const p of photos) {
+    const name = path.basename(p).toLowerCase();
+    if (keywords.some((kw) => name.includes(kw))) {
+      specific.push(p);
+    } else if (GENERAL_KEYWORDS.some((kw) => name.includes(kw))) {
+      generalOnly.push(p);
+    }
+  }
+
+  const matched = [...specific, ...generalOnly];
   return matched.length > 0 ? matched : photos;
 }
 
