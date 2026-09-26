@@ -14,8 +14,10 @@ const { config } = require('../config');
 // Chance (0-1) of using a real photo as the background for a quote/tip/
 // spotlight post, when the photo library actually has photos available.
 // The rest of the time, and always when the library is empty, those post
-// types fall back to the plain gradient card.
-const PHOTO_CARD_PROBABILITY = 0.6;
+// types fall back to the plain gradient card. Set to 1 so real travel
+// photos are used whenever the library has one, since the whole point of
+// loading 186 real photos was to feature them prominently.
+const PHOTO_CARD_PROBABILITY = 1;
 
 /**
  * Picks and runs the right image renderer for a generated post. Keeps this
