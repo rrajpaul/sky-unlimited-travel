@@ -128,4 +128,76 @@ async function generatePost({ postType, slot = 1 } = {}) {
   return { postType: type, ...parsed };
 }
 
-module.exports = { generatePost, pickPostType, POST_TYPES };
+/**
+ * Generates a giveaway promo post from REAL giveaway data (prize amount,
+ * destination, entry URL) — unlike the five regular post types, nothing
+ * here is invented by the model. The prize amount, destination, and URL are
+ * embedded as given facts in the prompt and the model is told explicitly
+ * not to alter them, since getting these wrong in a real promotion is a
+ * much bigger problem than a slightly awkward caption.
+ */
+async function generateGiveawayPost({ giveaway, pageUrl }) {
+  assertConfigured(['anthropicApiKey']);
+  const { name } = config.brand;
+
+  const destination = giveaway.destinations?.[0] || 'a dream destination';
+  const daysLeft = Math.max(
+    1,
+    Math.ceil((giveaway.end - new Date()) / (1000 * 60 * 60 * 24))
+  );
+
+  const prompt = `You are writing a single social media post for ${name}, a travel
+agency, promoting a CURRENTLY ACTIVE giveaway. The post will be shared on
+Facebook and Instagram.
+
+Real facts about this giveaway — use them EXACTLY as given, do not change,
+round, or embellish the numbers or destination:
+- Prize: $${giveaway.prizeValueUsd} USD ($${giveaway.prizeValueCad} CAD) travel credit
+- Destination: ${destination}
+- Entry link: ${pageUrl}
+- Roughly ${daysLeft} day(s) left to enter
+
+Respond with ONLY a JSON object, no markdown fences, no preamble, in this
+exact shape:
+{
+  "headline": "short, exciting line for the image, under 10 words, mentioning the destination or prize",
+  "caption": "the full social caption, 2-4 sentences, exciting and clear about how to enter (mention the link exactly as given above), ending with 2-4 relevant hashtags",
+  "image_theme": "one of: beach, mountains, city-skyline, airplane, tropical, roadtrip — pick whichever best matches the destination"
+}`;
+
+  const client = new Anthropic({ apiKey: config.anthropicApiKey });
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 500,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const raw = response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+    .trim();
+
+  const cleaned = raw.replace(/^```json\s*|```$/g, '').trim();
+
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (err) {
+    throw new Error(`Failed to parse AI giveaway content as JSON: ${err.message}\nRaw: ${raw}`);
+  }
+
+  if (!parsed.headline || !parsed.caption) {
+    throw new Error(`AI giveaway content missing required fields. Got: ${JSON.stringify(parsed)}`);
+  }
+
+  return {
+    postType: 'giveaway',
+    ...parsed,
+    prizeValueUsd: giveaway.prizeValueUsd,
+    prizeValueCad: giveaway.prizeValueCad,
+    destination,
+  };
+}
+
+module.exports = { generatePost, generateGiveawayPost, pickPostType, POST_TYPES };

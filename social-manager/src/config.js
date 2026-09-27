@@ -35,6 +35,21 @@ const config = {
     process.env.POST_CRON_2 === undefined ? '0 19 * * *' : process.env.POST_CRON_2,
   timezone: process.env.TIMEZONE || 'America/New_York',
 
+  // --- Giveaway posting ---
+  // Public settings endpoint on the main website's server (a SEPARATE app
+  // from this one — see server/routes/giveaway.js there). Polled once per
+  // scheduled run to decide whether a giveaway is currently active; nothing
+  // here writes to that system, this only ever reads from it.
+  giveawayApiUrl:
+    process.env.GIVEAWAY_API_URL || 'https://www.skyunlimitedtravel.com/api/giveaway/settings',
+  // Where the caption sends people to actually enter.
+  giveawayPageUrl:
+    process.env.GIVEAWAY_PAGE_URL || 'https://www.skyunlimitedtravel.com/#giveaway',
+  // Third daily post, independent of POST_CRON/POST_CRON_2 — only actually
+  // posts when a giveaway is active (see giveawayService.js); silently does
+  // nothing otherwise, so leaving this on year-round is safe.
+  giveawayPostCron: process.env.GIVEAWAY_POST_CRON || '0 15 * * *',
+
   brand: {
     name: process.env.BRAND_NAME || 'Sky Unlimited Travel',
     tagline:

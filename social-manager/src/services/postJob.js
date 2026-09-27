@@ -1,11 +1,13 @@
-const { generatePost } = require('./contentGenerator');
+const { generatePost, generateGiveawayPost } = require('./contentGenerator');
 const {
   generateImage,
   generatePhotoCard,
   generateIllustrationCard,
   generateChecklistCard,
+  generateGiveawayCard,
 } = require('./imageGenerator');
 const { pickNextPhoto, listPhotos } = require('./photoLibrary');
+const { getActiveGiveaway } = require('./giveawayService');
 const { postToFacebook } = require('./facebookService');
 const { postToInstagram } = require('./instagramService');
 const { appendHistory } = require('./historyStore');
@@ -126,6 +128,89 @@ async function runDailyPost({ dryRun = false, slot = 1, postType } = {}) {
   return logged;
 }
 
+/**
+ * Third, independent daily post: only actually posts anything when a
+ * giveaway is currently active on the main website (see
+ * giveawayService.js). When there isn't one, this is a deliberate no-op —
+ * it returns a `{ skipped: true }` result and does NOT write to history,
+ * so history stays a record of actual posts (and real failures) rather
+ * than being cluttered with "nothing to do today" entries for every day a
+ * giveaway isn't running.
+ *
+ * `dryRun: true` still generates real content + image from whatever
+ * giveaway IS currently active (for testing), but never posts — same
+ * meaning as in runDailyPost.
+ */
+async function runGiveawayPost({ dryRun = false } = {}) {
+  const giveaway = await getActiveGiveaway();
+
+  if (!giveaway) {
+    return {
+      postType: 'giveaway',
+      skipped: true,
+      reason: 'No active giveaway right now.',
+      dryRun,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  const post = await generateGiveawayPost({ giveaway, pageUrl: config.giveawayPageUrl });
+
+  const prizeLabel = `$${post.prizeValueUsd} USD`;
+  const image = await generateGiveawayCard({
+    headline: post.headline,
+    prizeLabel,
+    destination: post.destination,
+    theme: post.image_theme,
+  });
+
+  if (!image.publicUrl && !dryRun) {
+    throw new Error(
+      'PUBLIC_BASE_URL is not configured, so the generated image has no public URL for Meta to fetch. Set PUBLIC_BASE_URL in .env, or use dryRun/preview mode.'
+    );
+  }
+
+  const result = {
+    postType: 'giveaway',
+    skipped: false,
+    headline: post.headline,
+    caption: post.caption,
+    prizeValueUsd: post.prizeValueUsd,
+    prizeValueCad: post.prizeValueCad,
+    destination: post.destination,
+    imageTheme: post.image_theme,
+    imageFile: image.fileName,
+    imagePublicUrl: image.publicUrl,
+    dryRun,
+    facebook: null,
+    instagram: null,
+    errors: [],
+  };
+
+  if (!dryRun) {
+    try {
+      result.facebook = await postToFacebook({
+        imageUrl: image.publicUrl,
+        caption: post.caption,
+      });
+    } catch (err) {
+      result.errors.push({ platform: 'facebook', message: describeError(err) });
+    }
+
+    try {
+      result.instagram = await postToInstagram({
+        imageUrl: image.publicUrl,
+        caption: post.caption,
+      });
+    } catch (err) {
+      result.errors.push({ platform: 'instagram', message: describeError(err) });
+    }
+  }
+
+  const logged = await appendHistory(result);
+  return logged;
+}
+
 function describeError(err) {
   // Meta's Graph API returns detailed errors under response.data.error
   if (err.response?.data?.error) {
@@ -134,4 +219,4 @@ function describeError(err) {
   return err.message;
 }
 
-module.exports = { runDailyPost };
+module.exports = { runDailyPost, runGiveawayPost };

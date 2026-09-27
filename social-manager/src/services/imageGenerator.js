@@ -96,6 +96,27 @@ function buildSvg({ headline, brandName, theme }) {
 }
 
 /**
+ * Writes a sharp pipeline (already built, not yet rendered) out to
+ * /public/previews as a PNG and returns both the local file path and the
+ * public URL Meta's Graph API can fetch it from. Shared by every card type
+ * below so they don't each re-implement file naming / public URL logic.
+ */
+async function finalize(sharpPipeline) {
+  const fileName = `${uuidv4()}.png`;
+  const dir = path.join(__dirname, '..', '..', 'public', 'previews');
+  await fs.mkdir(dir, { recursive: true });
+  const filePath = path.join(dir, fileName);
+
+  await sharpPipeline.png().toFile(filePath);
+
+  const publicUrl = config.publicBaseUrl
+    ? `${config.publicBaseUrl.replace(/\/$/, '')}/previews/${fileName}`
+    : null;
+
+  return { filePath, publicUrl, fileName };
+}
+
+/**
  * Renders a post to a PNG file under /public/previews and returns both the
  * local file path and the public URL Meta's Graph API can fetch it from.
  */
@@ -106,38 +127,19 @@ async function generateImage({ headline, theme }) {
     theme,
   });
 
-  return renderSvgToFile(svg);
+  return finalize(sharp(Buffer.from(svg)));
 }
 
 /**
- * Shared helper: renders an SVG string to a PNG under /public/previews and
- * returns its local path + public URL. Used by every card type below.
+ * Renders a headline over one of the user's own photos: the photo is
+ * cropped to a 1080x1080 square, a dark gradient scrim is added at the
+ * bottom so white text stays legible over any image, then the headline +
+ * brand name are overlaid.
  */
-async function renderSvgToFile(svg) {
-  const fileName = `${uuidv4()}.png`;
-  const dir = path.join(__dirname, '..', '..', 'public', 'previews');
-  await fs.mkdir(dir, { recursive: true });
-  const filePath = path.join(dir, fileName);
-
-  await sharp(Buffer.from(svg)).png().toFile(filePath);
-
-  const publicUrl = config.publicBaseUrl
-    ? `${config.publicBaseUrl.replace(/\/$/, '')}/previews/${fileName}`
-    : null;
-
-  return { filePath, publicUrl, fileName };
-}
-
-/**
- * Builds the semi-transparent gradient "scrim" + headline + brand-name text
- * overlay used on top of a real photo, so white text stays legible over
- * busy image content underneath.
- */
-function buildPhotoOverlaySvg({ headline, brandName }) {
+async function generatePhotoCard({ headline, photoPath }) {
   const lines = wrapText(headline, 26);
-  const lineHeight = 56;
-  const scrimHeight = 420; // bottom portion of the 1080px-tall image
-  const scrimTop = HEIGHT - scrimHeight;
+  const lineHeight = 58;
+  const scrimHeight = 220 + lines.length * lineHeight;
   const textStartY = HEIGHT - scrimHeight + 90;
 
   const tspans = lines
@@ -147,23 +149,21 @@ function buildPhotoOverlaySvg({ headline, brandName }) {
     )
     .join('');
 
-  return `
+  const overlaySvg = `
 <svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="scrim" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="rgba(0,0,0,0)" />
-      <stop offset="100%" stop-color="rgba(0,0,0,0.82)" />
+      <stop offset="100%" stop-color="rgba(0,0,0,0.78)" />
     </linearGradient>
   </defs>
-  <rect x="0" y="${scrimTop}" width="${WIDTH}" height="${scrimHeight}" fill="url(#scrim)" />
-
+  <rect x="0" y="${HEIGHT - scrimHeight}" width="${WIDTH}" height="${scrimHeight}" fill="url(#scrim)" />
   <text
     font-family="Georgia, 'Times New Roman', serif"
     font-size="46"
     font-weight="600"
     fill="#ffffff"
   >${tspans}</text>
-
   <text
     x="60"
     y="${HEIGHT - 50}"
@@ -171,118 +171,68 @@ function buildPhotoOverlaySvg({ headline, brandName }) {
     font-size="26"
     letter-spacing="2"
     fill="rgba(255,255,255,0.85)"
-  >${escapeXml(brandName.toUpperCase())}</text>
+  >${escapeXml(config.brand.name.toUpperCase())}</text>
 </svg>`.trim();
-}
-
-/**
- * Renders a post using one of the user-supplied photos as the background,
- * with the headline + brand name overlaid in a legible scrim at the bottom.
- * Caller is responsible for confirming a photo is actually available
- * (e.g. via photoLibrary.pickRandomPhoto()) before calling this.
- */
-async function generatePhotoCard({ headline, photoPath }) {
-  const overlaySvg = buildPhotoOverlaySvg({
-    headline,
-    brandName: config.brand.name,
-  });
 
   const photoBuffer = await sharp(photoPath)
-    .resize(WIDTH, HEIGHT, { fit: 'cover', position: 'attention' })
+    .resize(WIDTH, HEIGHT, { fit: 'cover', position: 'centre' })
     .toBuffer();
 
-  const fileName = `${uuidv4()}.png`;
-  const dir = path.join(__dirname, '..', '..', 'public', 'previews');
-  await fs.mkdir(dir, { recursive: true });
-  const filePath = path.join(dir, fileName);
+  const pipeline = sharp(photoBuffer).composite([
+    { input: Buffer.from(overlaySvg), top: 0, left: 0 },
+  ]);
 
-  await sharp(photoBuffer)
-    .composite([{ input: Buffer.from(overlaySvg) }])
-    .png()
-    .toFile(filePath);
-
-  const publicUrl = config.publicBaseUrl
-    ? `${config.publicBaseUrl.replace(/\/$/, '')}/previews/${fileName}`
-    : null;
-
-  return { filePath, publicUrl, fileName };
+  return finalize(pipeline);
 }
 
-/**
- * Simple, flat-design icon "scenes" per theme — a lightweight illustration
- * rather than a photo or a plain gradient card. Deliberately basic shapes
- * (circles, paths, rects); the goal is a recognizable, on-brand graphic,
- * not fine art.
- */
-function buildIllustrationScene(theme) {
-  switch (theme) {
-    case 'beach':
-    case 'tropical':
-      return `
-        <circle cx="860" cy="220" r="90" fill="#fde68a" opacity="0.9" />
-        <path d="M0 640 Q 270 560 540 640 T 1080 640 V 1080 H 0 Z" fill="rgba(255,255,255,0.12)" />
-        <path d="M0 760 Q 270 700 540 760 T 1080 760 V 1080 H 0 Z" fill="rgba(255,255,255,0.18)" />
-        <!-- palm tree -->
-        <path d="M220 900 C 210 760 260 660 260 660" stroke="#1f2937" stroke-width="14" fill="none" stroke-linecap="round" />
-        <path d="M260 660 C 200 630 150 640 120 610" stroke="#065f46" stroke-width="16" fill="none" stroke-linecap="round" />
-        <path d="M260 660 C 210 610 200 570 190 540" stroke="#065f46" stroke-width="16" fill="none" stroke-linecap="round" />
-        <path d="M260 660 C 300 610 340 590 380 570" stroke="#065f46" stroke-width="16" fill="none" stroke-linecap="round" />
-        <path d="M260 660 C 320 640 360 650 400 630" stroke="#065f46" stroke-width="16" fill="none" stroke-linecap="round" />
-      `;
-    case 'mountains':
-      return `
-        <circle cx="860" cy="200" r="80" fill="#fde68a" opacity="0.85" />
-        <path d="M0 780 L 220 520 L 400 700 L 560 460 L 780 720 L 1000 560 L 1080 640 V 1080 H 0 Z" fill="rgba(255,255,255,0.14)" />
-        <path d="M0 860 L 260 640 L 460 820 L 700 600 L 1080 820 V 1080 H 0 Z" fill="rgba(255,255,255,0.22)" />
-      `;
-    case 'city-skyline':
-      return `
-        <circle cx="180" cy="200" r="60" fill="#fde68a" opacity="0.7" />
-        ${[ [80, 520, 90, 400], [190, 460, 110, 460], [320, 560, 90, 360], [430, 400, 120, 520], [570, 500, 90, 420], [680, 440, 130, 480], [830, 560, 100, 360], [950, 480, 100, 440] ]
-          .map(([x, y, w, h]) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="rgba(255,255,255,0.16)" rx="4" />`)
-          .join('')}
-      `;
-    case 'airplane':
-      return `
-        <ellipse cx="200" cy="260" rx="90" ry="40" fill="rgba(255,255,255,0.18)" />
-        <ellipse cx="330" cy="220" rx="70" ry="32" fill="rgba(255,255,255,0.14)" />
-        <ellipse cx="800" cy="720" rx="110" ry="46" fill="rgba(255,255,255,0.12)" />
-        <g transform="translate(540 520) rotate(-25)">
-          <path d="M-220 0 H180 L260 -30 L260 30 L180 0 M40 0 L-40 -90 L0 -90 L80 0 M40 0 L-40 90 L0 90 L80 0" fill="#ffffff" opacity="0.92" />
-        </g>
-      `;
-    case 'roadtrip':
-      return `
-        <circle cx="860" cy="200" r="80" fill="#fde68a" opacity="0.85" />
-        <path d="M0 1080 L420 500 L660 500 L1080 1080 Z" fill="rgba(255,255,255,0.12)" />
-        <path d="M500 1080 L560 620 L620 620 L680 1080 Z" fill="rgba(255,255,255,0.35)" />
-        <g transform="translate(300 840)">
-          <rect x="0" y="0" width="260" height="90" rx="16" fill="#ffffff" opacity="0.92" />
-          <rect x="30" y="-50" width="150" height="70" rx="14" fill="#ffffff" opacity="0.92" />
-          <circle cx="55" cy="95" r="26" fill="#1f2937" />
-          <circle cx="205" cy="95" r="26" fill="#1f2937" />
-        </g>
-      `;
-    default:
-      return '';
-  }
-}
+// Very simple flat-design motifs, one per theme, drawn as plain SVG shapes
+// (no external assets/icon libraries needed).
+const THEME_MOTIFS = {
+  beach: `<circle cx="860" cy="260" r="90" fill="rgba(255,224,130,0.9)" />
+    <path d="M0,680 Q270,600 540,680 T1080,680 V1080 H0 Z" fill="rgba(255,255,255,0.10)" />`,
+  mountains: `<path d="M0,760 L260,480 L440,660 L620,400 L860,700 L1080,600 V1080 H0 Z" fill="rgba(255,255,255,0.12)" />`,
+  'city-skyline': `<g fill="rgba(255,255,255,0.14)">
+    <rect x="120" y="560" width="100" height="360" />
+    <rect x="260" y="460" width="90" height="460" />
+    <rect x="400" y="600" width="80" height="320" />
+    <rect x="540" y="380" width="110" height="540" />
+    <rect x="700" y="520" width="90" height="400" />
+    <rect x="850" y="460" width="90" height="460" />
+  </g>`,
+  airplane: `<g fill="rgba(255,255,255,0.16)">
+    <path d="M150,540 L650,480 L900,420 L960,450 L720,540 L650,600 L520,600 L420,560 L150,600 Z" />
+  </g>`,
+  tropical: `<g fill="rgba(255,255,255,0.14)">
+    <path d="M300,760 C260,620 340,520 420,500 C400,600 360,700 300,760 Z" />
+    <path d="M300,760 C340,640 300,540 220,500 C260,600 280,700 300,760 Z" />
+    <path d="M300,760 C220,700 200,600 230,520 C260,620 280,700 300,760 Z" />
+    <rect x="288" y="750" width="24" height="240" />
+  </g>`,
+  roadtrip: `<g fill="rgba(255,255,255,0.14)">
+    <rect x="0" y="760" width="1080" height="40" />
+    <rect x="330" y="650" width="420" height="120" rx="16" />
+    <circle cx="420" cy="790" r="45" />
+    <circle cx="660" cy="790" r="45" />
+  </g>`,
+};
 
 /**
- * Renders a lightweight illustration-style card: theme background gradient,
- * a simple flat-design scene, a short headline, and the brand name — for
- * variety against the plain gradient/quote cards and photo cards.
+ * Renders a simple flat-illustration card: gradient background, a plain
+ * themed motif (palm trees, skyline, plane, etc.), and a short headline.
+ * Used for the "illustration" post type, which is deliberately light and
+ * graphic rather than photo-based.
  */
 async function generateIllustrationCard({ headline, theme }) {
   const [colorA, colorB] = THEME_GRADIENTS[theme] || THEME_GRADIENTS.tropical;
-  const lines = wrapText(headline, 24);
-  const lineHeight = 58;
-  const textY = 150;
+  const motif = THEME_MOTIFS[theme] || THEME_MOTIFS.tropical;
+  const lines = wrapText(headline, 20);
+  const lineHeight = 62;
+  const startY = 260;
 
   const tspans = lines
     .map(
       (line, i) =>
-        `<tspan x="${WIDTH / 2}" y="${textY + i * lineHeight}">${escapeXml(line)}</tspan>`
+        `<tspan x="${WIDTH / 2}" y="${startY + i * lineHeight}">${escapeXml(line)}</tspan>`
     )
     .join('');
 
@@ -295,16 +245,177 @@ async function generateIllustrationCard({ headline, theme }) {
     </linearGradient>
   </defs>
   <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bg)" />
-
-  ${buildIllustrationScene(theme)}
-
+  ${motif}
   <text
     font-family="Georgia, 'Times New Roman', serif"
-    font-size="48"
-    font-weight="600"
+    font-size="56"
+    font-weight="700"
     fill="#ffffff"
     text-anchor="middle"
   >${tspans}</text>
+  <text
+    x="${WIDTH / 2}"
+    y="${HEIGHT - 70}"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="30"
+    letter-spacing="2"
+    fill="rgba(255,255,255,0.85)"
+    text-anchor="middle"
+  >${escapeXml(config.brand.name.toUpperCase())}</text>
+</svg>`.trim();
+
+  return finalize(sharp(Buffer.from(svg)));
+}
+
+/**
+ * Renders a titled checklist card (e.g. "5 Tips for Packing Light") with a
+ * short list of items, each prefixed by a checkmark bullet.
+ */
+async function generateChecklistCard({ title, items, theme }) {
+  const [colorA, colorB] = THEME_GRADIENTS[theme] || THEME_GRADIENTS.tropical;
+  const titleLines = wrapText(title, 24);
+  const titleLineHeight = 56;
+  const titleStartY = 140;
+
+  const titleTspans = titleLines
+    .map(
+      (line, i) =>
+        `<tspan x="70" y="${titleStartY + i * titleLineHeight}">${escapeXml(line)}</tspan>`
+    )
+    .join('');
+
+  let itemY = titleStartY + titleLines.length * titleLineHeight + 70;
+  const itemBlocks = [];
+  for (const item of items.slice(0, 5)) {
+    const itemLines = wrapText(item, 34);
+    const itemTspans = itemLines
+      .map(
+        (line, i) =>
+          `<tspan x="126" y="${itemY + i * 46}">${escapeXml(line)}</tspan>`
+      )
+      .join('');
+    itemBlocks.push(`
+      <circle cx="90" cy="${itemY - 16}" r="22" fill="rgba(255,255,255,0.18)" />
+      <path d="M79,${itemY - 16} l8,9 l14,-18" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+      <text font-family="Arial, Helvetica, sans-serif" font-size="34" fill="#ffffff">${itemTspans}</text>`);
+    itemY += itemLines.length * 46 + 40;
+  }
+
+  const svg = `
+<svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${colorA}" />
+      <stop offset="100%" stop-color="${colorB}" />
+    </linearGradient>
+  </defs>
+  <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bg)" />
+  <text
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="50"
+    font-weight="700"
+    fill="#ffffff"
+  >${titleTspans}</text>
+  ${itemBlocks.join('')}
+  <text
+    x="${WIDTH / 2}"
+    y="${HEIGHT - 60}"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="28"
+    letter-spacing="2"
+    fill="rgba(255,255,255,0.85)"
+    text-anchor="middle"
+  >${escapeXml(config.brand.name.toUpperCase())}</text>
+</svg>`.trim();
+
+  return finalize(sharp(Buffer.from(svg)));
+}
+
+/**
+ * Renders a giveaway promo card: gradient background, a themed motif, the
+ * headline, a prominent prize-amount + destination block, and an "ENTER
+ * NOW" banner. Distinct from the other card types since accuracy of the
+ * prize/destination text matters here — this is a real promotion, not
+ * inspirational content — so those are laid out as their own clearly
+ * separated block rather than folded into the headline.
+ */
+async function generateGiveawayCard({ headline, prizeLabel, destination, theme }) {
+  const [colorA, colorB] = THEME_GRADIENTS[theme] || THEME_GRADIENTS.tropical;
+  const motif = THEME_MOTIFS[theme] || THEME_MOTIFS.tropical;
+  const lines = wrapText(headline, 20);
+  const lineHeight = 58;
+  const startY = 190;
+
+  const headlineTspans = lines
+    .map(
+      (line, i) =>
+        `<tspan x="${WIDTH / 2}" y="${startY + i * lineHeight}">${escapeXml(line)}</tspan>`
+    )
+    .join('');
+
+  const prizeBlockY = startY + lines.length * lineHeight + 90;
+
+  const svg = `
+<svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${colorA}" />
+      <stop offset="100%" stop-color="${colorB}" />
+    </linearGradient>
+  </defs>
+  <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bg)" />
+  ${motif}
+
+  <rect x="${WIDTH / 2 - 180}" y="60" width="360" height="60" rx="30" fill="rgba(255,255,255,0.16)" />
+  <text
+    x="${WIDTH / 2}"
+    y="99"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="26"
+    font-weight="700"
+    letter-spacing="3"
+    fill="#ffffff"
+    text-anchor="middle"
+  >GIVEAWAY</text>
+
+  <text
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="52"
+    font-weight="700"
+    fill="#ffffff"
+    text-anchor="middle"
+  >${headlineTspans}</text>
+
+  <rect x="${WIDTH / 2 - 300}" y="${prizeBlockY}" width="600" height="150" rx="16" fill="rgba(0,0,0,0.25)" />
+  <text
+    x="${WIDTH / 2}"
+    y="${prizeBlockY + 62}"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="48"
+    font-weight="700"
+    fill="#ffffff"
+    text-anchor="middle"
+  >${escapeXml(prizeLabel)}</text>
+  <text
+    x="${WIDTH / 2}"
+    y="${prizeBlockY + 110}"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="30"
+    fill="rgba(255,255,255,0.9)"
+    text-anchor="middle"
+  >to ${escapeXml(destination)}</text>
+
+  <rect x="${WIDTH / 2 - 140}" y="${HEIGHT - 190}" width="280" height="64" rx="32" fill="#ffffff" />
+  <text
+    x="${WIDTH / 2}"
+    y="${HEIGHT - 148}"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="28"
+    font-weight="700"
+    letter-spacing="1"
+    fill="${config.brand.accentColor}"
+    text-anchor="middle"
+  >ENTER NOW</text>
 
   <text
     x="${WIDTH / 2}"
@@ -317,78 +428,7 @@ async function generateIllustrationCard({ headline, theme }) {
   >${escapeXml(config.brand.name.toUpperCase())}</text>
 </svg>`.trim();
 
-  return renderSvgToFile(svg);
-}
-
-/**
- * Renders an infographic-style checklist card: a title plus a short list of
- * items, each with a checkmark bullet. Good for "5 tips for..." style posts.
- */
-async function generateChecklistCard({ title, items, theme }) {
-  const [colorA, colorB] = THEME_GRADIENTS[theme] || THEME_GRADIENTS.tropical;
-  const titleLines = wrapText(title, 26);
-  const titleLineHeight = 52;
-  const titleStartY = 130;
-
-  const titleTspans = titleLines
-    .map(
-      (line, i) =>
-        `<tspan x="${WIDTH / 2}" y="${titleStartY + i * titleLineHeight}">${escapeXml(line)}</tspan>`
-    )
-    .join('');
-
-  const listTop = titleStartY + titleLines.length * titleLineHeight + 60;
-  const rowHeight = 110;
-  const maxItems = 5;
-  const shownItems = (items || []).slice(0, maxItems);
-
-  const itemsSvg = shownItems
-    .map((item, i) => {
-      const y = listTop + i * rowHeight;
-      const wrapped = wrapText(item, 34);
-      const itemTspans = wrapped
-        .map((line, li) => `<tspan x="150" y="${y + li * 34}">${escapeXml(line)}</tspan>`)
-        .join('');
-      return `
-        <circle cx="100" cy="${y - 12}" r="26" fill="rgba(255,255,255,0.18)" />
-        <path d="M88 ${y - 12} L97 ${y - 3} L114 ${y - 24}" stroke="#ffffff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-        <text font-family="Arial, Helvetica, sans-serif" font-size="30" fill="#ffffff">${itemTspans}</text>
-      `;
-    })
-    .join('');
-
-  const svg = `
-<svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="${colorA}" />
-      <stop offset="100%" stop-color="${colorB}" />
-    </linearGradient>
-  </defs>
-  <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bg)" />
-
-  <text
-    font-family="Georgia, 'Times New Roman', serif"
-    font-size="46"
-    font-weight="600"
-    fill="#ffffff"
-    text-anchor="middle"
-  >${titleTspans}</text>
-
-  ${itemsSvg}
-
-  <text
-    x="${WIDTH / 2}"
-    y="${HEIGHT - 50}"
-    font-family="Arial, Helvetica, sans-serif"
-    font-size="26"
-    letter-spacing="2"
-    fill="rgba(255,255,255,0.85)"
-    text-anchor="middle"
-  >${escapeXml(config.brand.name.toUpperCase())}</text>
-</svg>`.trim();
-
-  return renderSvgToFile(svg);
+  return finalize(sharp(Buffer.from(svg)));
 }
 
 module.exports = {
@@ -396,5 +436,6 @@ module.exports = {
   generatePhotoCard,
   generateIllustrationCard,
   generateChecklistCard,
+  generateGiveawayCard,
   THEME_GRADIENTS,
 };
