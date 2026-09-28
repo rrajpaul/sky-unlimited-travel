@@ -98,6 +98,10 @@ async function runDailyPost({ dryRun = false, slot = 1, postType } = {}) {
     imageTheme: post.image_theme,
     imageFile: image.fileName,
     imagePublicUrl: image.publicUrl,
+    // Which of the real 186 photos was actually used as this post's
+    // background — null for illustration/checklist/gradient posts, which
+    // never draw from the photo library at all.
+    sourcePhotoFile: image.sourcePhotoFile || null,
     dryRun,
     facebook: null,
     instagram: null,
@@ -124,8 +128,16 @@ async function runDailyPost({ dryRun = false, slot = 1, postType } = {}) {
     }
   }
 
-  const logged = await appendHistory(result);
-  return logged;
+  // A DB failure here must not erase or hide a post that may have already
+  // gone out successfully above — better to return the real result (just
+  // unsaved to history) and log the storage failure separately, than to
+  // throw and have the caller think the whole post failed.
+  try {
+    return await appendHistory(result);
+  } catch (err) {
+    console.error('[postJob] Failed to save post result to history:', err.message);
+    return result;
+  }
 }
 
 /**
@@ -207,8 +219,12 @@ async function runGiveawayPost({ dryRun = false } = {}) {
     }
   }
 
-  const logged = await appendHistory(result);
-  return logged;
+  try {
+    return await appendHistory(result);
+  } catch (err) {
+    console.error('[postJob] Failed to save giveaway post result to history:', err.message);
+    return result;
+  }
 }
 
 function describeError(err) {

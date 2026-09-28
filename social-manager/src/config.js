@@ -16,6 +16,11 @@ const config = {
 
   anthropicApiKey: required('ANTHROPIC_API_KEY'),
 
+  // Postgres connection string — reuses the MAIN WEBSITE's existing
+  // database (a separate app from this one). Post history is stored there
+  // in its own table (social_post_history), not a new database.
+  databaseUrl: required('DATABASE_URL'),
+
   graphApiVersion: process.env.GRAPH_API_VERSION || 'v21.0',
   fbPageId: required('FB_PAGE_ID'),
   fbPageAccessToken: required('FB_PAGE_ACCESS_TOKEN'),
