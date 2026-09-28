@@ -182,7 +182,11 @@ async function generatePhotoCard({ headline, photoPath }) {
     { input: Buffer.from(overlaySvg), top: 0, left: 0 },
   ]);
 
-  return finalize(pipeline);
+  const result = await finalize(pipeline);
+  // Track which of the real photos this actually was, separately from the
+  // generated composite's own random filename — the composite's UUID name
+  // says nothing about which underlying photo it was built from.
+  return { ...result, sourcePhotoFile: path.basename(photoPath) };
 }
 
 // Very simple flat-design motifs, one per theme, drawn as plain SVG shapes
