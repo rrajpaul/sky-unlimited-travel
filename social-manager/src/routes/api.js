@@ -58,6 +58,35 @@ router.get('/history', async (req, res) => {
   res.json(history.slice(0, limit));
 });
 
+// Summarizes which of the real photos (see sourcePhotoFile on each history
+// entry) have actually appeared in a real post, and how many times each —
+// built from history, not a separate tracking system, so it always matches
+// what genuinely got posted. dryRun previews are excluded, since they don't
+// represent a real post going out.
+router.get('/photo-usage', async (req, res) => {
+  try {
+    const [allPhotos, history] = await Promise.all([listPhotos(), readHistory()]);
+    const filenames = allPhotos.map((p) => path.basename(p));
+
+    const counts = {};
+    for (const entry of history) {
+      if (entry.dryRun || !entry.sourcePhotoFile) continue;
+      counts[entry.sourcePhotoFile] = (counts[entry.sourcePhotoFile] || 0) + 1;
+    }
+
+    const used = filenames.filter((f) => counts[f]).length;
+
+    res.json({
+      totalPhotos: filenames.length,
+      usedAtLeastOnce: used,
+      neverUsed: filenames.length - used,
+      counts, // { filename: timesUsed } — only includes photos used at least once
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Checks whether a giveaway is currently active, without generating
 // content or posting anything — useful for confirming the connection to
 // the main site's giveaway API works, and for seeing what data it's
