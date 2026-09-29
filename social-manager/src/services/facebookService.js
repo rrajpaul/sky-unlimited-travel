@@ -1,4 +1,5 @@
 const axios = require('axios');
+const fs = require('fs/promises');
 const { config, assertConfigured } = require('../config');
 
 /**
@@ -22,78 +23,31 @@ async function postToFacebook({ imageUrl, caption }) {
   return data; // { id, post_id }
 }
 
-// How long to wait between video-status checks, and how many times to
-// check before giving up. Video processing takes far longer than the
-// image-container processing elsewhere in this app (Instagram's image
-// containers usually finish in a few seconds; a 6-second Reel upload can
-// take a couple of minutes), so this is a much longer allowance than the
-// image polling loops use.
-const REEL_STATUS_POLL_INTERVAL_MS = 5000;
-const REEL_STATUS_POLL_MAX_ATTEMPTS = 60; // up to 5 minutes total
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Polls a Facebook video's status until uploading_phase reports complete
- * (or errors out), per Meta's documented Reels flow: the hosted-file
- * upload step returns { success: true } as soon as the fetch request is
- * accepted, not once Meta has actually finished retrieving and validating
- * the file — publishing before that finishes risks the same kind of
- * "not actually ready yet" failure Instagram's image containers can hit.
- */
-async function waitForFacebookVideoUploaded(videoId) {
-  for (let attempt = 0; attempt < REEL_STATUS_POLL_MAX_ATTEMPTS; attempt++) {
-    const { data } = await axios.get(
-      `https://graph.facebook.com/${config.graphApiVersion}/${videoId}`,
-      {
-        params: {
-          fields: 'status',
-          access_token: config.fbPageAccessToken,
-        },
-      }
-    );
-
-    const uploadStatus = data.status?.uploading_phase?.status;
-    const videoStatus = data.status?.video_status;
-
-    if (uploadStatus === 'error' || videoStatus === 'error' || videoStatus === 'upload_failed') {
-      const message =
-        data.status?.uploading_phase?.errors?.[0]?.message ||
-        data.status?.processing_phase?.error?.message ||
-        'Unknown error';
-      throw new Error(`Facebook Reel upload failed: ${message}`);
-    }
-
-    if (uploadStatus === 'complete') return;
-
-    await sleep(REEL_STATUS_POLL_INTERVAL_MS);
-  }
-
-  throw new Error(
-    `Facebook Reel upload did not finish after ${REEL_STATUS_POLL_MAX_ATTEMPTS} status checks.`
-  );
-}
-
 /**
  * Publishes a Reel to the configured Facebook Page, following Meta's
  * 3-step Reels Publishing API:
  *   1. POST /{page-id}/video_reels with upload_phase=start — returns a
- *      video_id (the upload_url in the response isn't used here, since
- *      step 2 uses the hosted-file method instead of a raw byte upload).
- *   2. POST to rupload.facebook.com/video-upload/{video_id} with
- *      file_url pointing at our own publicly hosted MP4 — Meta fetches it
- *      from there directly, same idea as image posts, just a different
- *      host for video.
+ *      video_id.
+ *   2. POST the actual video BYTES to rupload.facebook.com/video-upload/
+ *      {video_id} (the "Upload a Local File" method, not the hosted-file/
+ *      file_url method) — this pushes the file directly rather than
+ *      asking Facebook to fetch it from a URL. That matters here
+ *      specifically: the file_url method requires the hosting domain's
+ *      robots.txt to allow Facebook's crawler, and Railway's default
+ *      *.up.railway.app domains serve a platform-level robots.txt that
+ *      blocks it (confirmed via a real FileUrlProcessingError / "403
+ *      Restricted by robots.txt" during testing) — a restriction outside
+ *      this app's own code. Uploading bytes directly sidesteps that
+ *      entirely, and doesn't depend on ever configuring a custom domain.
  *   3. POST /{page-id}/video_reels with upload_phase=finish, video_state=
  *      PUBLISHED, and the caption (as `description`) — this actually
  *      publishes it.
- * A status check is inserted between steps 2 and 3 (see
- * waitForFacebookVideoUploaded) since the hosted-file upload step returns
- * success as soon as the fetch is accepted, not once it's actually done.
+ * Unlike the hosted-file method, a successful byte upload response means
+ * Facebook has actually received the complete file already (no separate
+ * "did the fetch finish yet" gap to poll for), so this goes straight to
+ * step 3 once step 2 succeeds.
  */
-async function postReelToFacebook({ videoUrl, caption }) {
+async function postReelToFacebook({ videoFilePath, caption }) {
   assertConfigured(['fbPageId', 'fbPageAccessToken']);
 
   const startUrl = `https://graph.facebook.com/${config.graphApiVersion}/${config.fbPageId}/video_reels`;
@@ -111,15 +65,19 @@ async function postReelToFacebook({ videoUrl, caption }) {
     );
   }
 
+  const videoBuffer = await fs.readFile(videoFilePath);
+
   const uploadUrl = `https://rupload.facebook.com/video-upload/${videoId}`;
-  await axios.post(uploadUrl, null, {
+  await axios.post(uploadUrl, videoBuffer, {
     headers: {
       Authorization: `OAuth ${config.fbPageAccessToken}`,
-      file_url: videoUrl,
+      'Content-Type': 'application/octet-stream',
+      offset: '0',
+      file_size: String(videoBuffer.length),
     },
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
   });
-
-  await waitForFacebookVideoUploaded(videoId);
 
   const finishUrl = `https://graph.facebook.com/${config.graphApiVersion}/${config.fbPageId}/video_reels`;
   const { data: finishData } = await axios.post(finishUrl, null, {

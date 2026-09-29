@@ -280,7 +280,7 @@ async function runReelPost({ dryRun = false } = {}) {
   if (!dryRun) {
     try {
       result.facebook = await postReelToFacebook({
-        videoUrl: video.publicUrl,
+        videoFilePath: video.filePath,
         caption: post.caption,
       });
     } catch (err) {
