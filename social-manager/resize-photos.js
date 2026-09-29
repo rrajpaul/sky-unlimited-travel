@@ -3,7 +3,27 @@ const fs = require('fs');
 const path = require('path');
 
 const dir = 'assets/photos';
-const files = fs.readdirSync(dir).filter((f) => /\.(jpe?g|png|webp|svg)$/i.test(f));
+
+// Only process files whose last-modified date is TODAY (local time) — so
+// re-running this script only picks up newly-added photos instead of
+// reprocessing (and re-compressing) everything that was already converted
+// in an earlier run.
+function isFromToday(filePath) {
+  const { mtime } = fs.statSync(filePath);
+  const now = new Date();
+  return (
+    mtime.getFullYear() === now.getFullYear() &&
+    mtime.getMonth() === now.getMonth() &&
+    mtime.getDate() === now.getDate()
+  );
+}
+
+const files = fs
+  .readdirSync(dir)
+  .filter((f) => /\.(jpe?g|png|webp|svg)$/i.test(f))
+  .filter((f) => isFromToday(path.join(dir, f)));
+
+console.log(`Found ${files.length} photo(s) modified today.`);
 
 (async () => {
   for (const file of files) {
