@@ -6,6 +6,8 @@ const { startScheduler } = require('./scheduler');
 
 const app = express();
 
+app.use(express.json());
+
 // Serves generated images publicly at /previews/<file>.png so Meta's Graph
 // API can fetch them by URL (PUBLIC_BASE_URL must point at this server).
 app.use('/previews', express.static(path.join(__dirname, '..', 'public', 'previews')));
