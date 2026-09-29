@@ -200,4 +200,62 @@ exact shape:
   };
 }
 
-module.exports = { generatePost, generateGiveawayPost, pickPostType, POST_TYPES };
+/**
+ * Generates the headline + caption for a Reel. Deliberately the same
+ * "generic enough to work under any photo" style as travel_quote/
+ * travel_tip (see pickPostType) rather than naming a specific place —
+ * the Reel's photo is picked by the same plain rotation used for the
+ * other photo-based post types, so the copy must never depend on which
+ * specific photo ends up behind it. Kept short: this sits over a 6-second
+ * vertical video, not a feed image, so a shorter headline reads better on
+ * screen for that little time.
+ */
+async function generateReelPost() {
+  assertConfigured(['anthropicApiKey']);
+  const { name, tagline } = config.brand;
+
+  const prompt = `You are writing the on-screen text and caption for a short
+(6 second) Instagram/Facebook Reel for ${name}, a travel agency (${tagline}).
+The Reel is a single travel photo with a slow zoom, no other footage.
+
+Respond with ONLY a JSON object, no markdown fences, no preamble, in this
+exact shape:
+{
+  "headline": "very short, punchy on-screen text, under 8 words — this needs to be readable in a couple of seconds on a small phone screen",
+  "caption": "the full social caption, 1-3 sentences, energetic, ending with 3-5 relevant hashtags"
+}
+
+Write about the FEELING of travel/escape in general — do not name a
+specific real city, landmark, or country, since the photo behind this text
+is chosen independently and may not match a specific place you mention.`;
+
+  const client = new Anthropic({ apiKey: config.anthropicApiKey });
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 400,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const raw = response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+    .trim();
+
+  const cleaned = raw.replace(/^```json\s*|```$/g, '').trim();
+
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (err) {
+    throw new Error(`Failed to parse AI Reel content as JSON: ${err.message}\nRaw: ${raw}`);
+  }
+
+  if (!parsed.headline || !parsed.caption) {
+    throw new Error(`AI Reel content missing required fields. Got: ${JSON.stringify(parsed)}`);
+  }
+
+  return { postType: 'reel', ...parsed };
+}
+
+module.exports = { generatePost, generateGiveawayPost, generateReelPost, pickPostType, POST_TYPES };

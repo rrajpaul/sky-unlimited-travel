@@ -1,6 +1,6 @@
 const path = require('path');
 const express = require('express');
-const { runDailyPost, runGiveawayPost } = require('../services/postJob');
+const { runDailyPost, runGiveawayPost, runReelPost } = require('../services/postJob');
 const { readHistory } = require('../services/historyStore');
 const { listPhotos } = require('../services/photoLibrary');
 const { getActiveGiveaway } = require('../services/giveawayService');
@@ -118,6 +118,31 @@ router.post('/giveaway-preview', async (req, res) => {
 router.post('/giveaway-post-now', async (req, res) => {
   try {
     const result = await runGiveawayPost({ dryRun: false });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Generates a Reel (video + headline + caption) WITHOUT posting — same
+// dry-run pattern as /preview, but meaningfully slower (a few seconds of
+// real FFmpeg encoding), since there's no cheap way to preview a video
+// that's actually representative of what would really get posted.
+router.post('/reel-preview', async (req, res) => {
+  try {
+    const result = await runReelPost({ dryRun: true });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manually trigger a real Reel post right now, in addition to the daily
+// 11am schedule. This posts to BOTH Facebook and Instagram Reels for
+// real — there is no "just testing" version of this one.
+router.post('/reel-post-now', async (req, res) => {
+  try {
+    const result = await runReelPost({ dryRun: false });
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });

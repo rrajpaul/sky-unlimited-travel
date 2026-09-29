@@ -76,4 +76,68 @@ async function postToInstagram({ imageUrl, caption }) {
   return published; // { id }
 }
 
-module.exports = { postToInstagram };
+// Video containers (Reels) take far longer to process than image
+// containers — the same STATUS_POLL_MAX_ATTEMPTS used for images (10
+// attempts, 20 seconds total) would give up long before a 6-second Reel
+// finishes processing. This is a separate, much longer allowance rather
+// than just raising the image ones, since making every image post wait
+// through the same generous timeout on a real failure would slow those
+// down for no benefit.
+const REEL_STATUS_POLL_INTERVAL_MS = 5000;
+const REEL_STATUS_POLL_MAX_ATTEMPTS = 60; // up to 5 minutes total
+
+async function waitForReelContainerReady(containerId) {
+  for (let attempt = 0; attempt < REEL_STATUS_POLL_MAX_ATTEMPTS; attempt++) {
+    const { data } = await axios.get(`${BASE()}/${containerId}`, {
+      params: {
+        fields: 'status_code',
+        access_token: config.fbPageAccessToken,
+      },
+    });
+
+    if (data.status_code === 'FINISHED') return;
+    if (data.status_code === 'ERROR') {
+      throw new Error(`Instagram Reel container failed to process (status_code: ERROR).`);
+    }
+    await sleep(REEL_STATUS_POLL_INTERVAL_MS);
+  }
+
+  throw new Error(
+    `Instagram Reel container did not finish processing after ${REEL_STATUS_POLL_MAX_ATTEMPTS} attempts.`
+  );
+}
+
+/**
+ * Publishes a Reel to Instagram — same container-then-publish shape as
+ * postToInstagram above, but media_type: 'REELS' and video_url instead of
+ * image_url (per Meta's Content Publishing API), and using the
+ * longer-timeout status poll since video processing takes meaningfully
+ * longer than an image.
+ */
+async function postReelToInstagram({ videoUrl, caption }) {
+  assertConfigured(['igBusinessAccountId', 'fbPageAccessToken']);
+
+  const createUrl = `${BASE()}/${config.igBusinessAccountId}/media`;
+  const { data: container } = await axios.post(createUrl, null, {
+    params: {
+      media_type: 'REELS',
+      video_url: videoUrl,
+      caption,
+      access_token: config.fbPageAccessToken,
+    },
+  });
+
+  await waitForReelContainerReady(container.id);
+
+  const publishUrl = `${BASE()}/${config.igBusinessAccountId}/media_publish`;
+  const { data: published } = await axios.post(publishUrl, null, {
+    params: {
+      creation_id: container.id,
+      access_token: config.fbPageAccessToken,
+    },
+  });
+
+  return published; // { id }
+}
+
+module.exports = { postToInstagram, postReelToInstagram };

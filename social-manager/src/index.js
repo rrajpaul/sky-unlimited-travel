@@ -19,6 +19,8 @@ app.get('/', (req, res) => {
       health: 'GET /api/health',
       preview: 'POST /api/preview  (generate content + image, do not post)',
       postNow: 'POST /api/post-now (generate + publish to Facebook & Instagram immediately)',
+      reelPreview: 'POST /api/reel-preview (generate a Reel video, do not post)',
+      reelPostNow: 'POST /api/reel-post-now (generate + publish a Reel immediately)',
       history: 'GET /api/history?limit=30',
     },
   });

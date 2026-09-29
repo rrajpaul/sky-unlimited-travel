@@ -1,4 +1,4 @@
-const { generatePost, generateGiveawayPost } = require('./contentGenerator');
+const { generatePost, generateGiveawayPost, generateReelPost } = require('./contentGenerator');
 const {
   generateImage,
   generatePhotoCard,
@@ -6,10 +6,11 @@ const {
   generateChecklistCard,
   generateGiveawayCard,
 } = require('./imageGenerator');
+const { generateReelVideo } = require('./videoGenerator');
 const { pickNextPhoto, listPhotos } = require('./photoLibrary');
 const { getActiveGiveaway } = require('./giveawayService');
-const { postToFacebook } = require('./facebookService');
-const { postToInstagram } = require('./instagramService');
+const { postToFacebook, postReelToFacebook } = require('./facebookService');
+const { postToInstagram, postReelToInstagram } = require('./instagramService');
 const { appendHistory } = require('./historyStore');
 const { config } = require('../config');
 
@@ -227,6 +228,83 @@ async function runGiveawayPost({ dryRun = false } = {}) {
   }
 }
 
+/**
+ * Posts a Reel (short vertical video) instead of the usual static image —
+ * this is what the 11am slot runs every day now, replacing runDailyPost
+ * for that slot specifically (see scheduler.js). Always uses a real photo
+ * (never the illustration/checklist/gradient fallbacks the image post
+ * types have), picked the same theme-agnostic way as those, and shares the
+ * exact same duplicate-prevention logic in photoLibrary.js — a Reel and a
+ * photo post are both "used the photo" as far as that check is concerned.
+ *
+ * Posts to BOTH Facebook and Instagram Reels independently, same
+ * partial-failure handling as runDailyPost: one platform failing doesn't
+ * stop the other, and both get recorded in `errors`.
+ *
+ * `dryRun: true` still fully renders the actual video (so you can watch
+ * exactly what would be posted) but skips publishing to either platform —
+ * more expensive than an image dry-run (a few seconds of FFmpeg encoding
+ * plus, once deployed, a still-real photo pick), but there's no cheaper
+ * way to preview a video that's actually representative of what would go
+ * out.
+ */
+async function runReelPost({ dryRun = false } = {}) {
+  const post = await generateReelPost();
+
+  const photoPath = await pickNextPhoto();
+  if (!photoPath) {
+    throw new Error('No photos available in the library to build a Reel from.');
+  }
+
+  const video = await generateReelVideo({ headline: post.headline, photoPath });
+
+  if (!video.publicUrl && !dryRun) {
+    throw new Error(
+      'PUBLIC_BASE_URL is not configured, so the generated Reel has no public URL for Meta to fetch. Set PUBLIC_BASE_URL in .env, or use dryRun/preview mode.'
+    );
+  }
+
+  const result = {
+    postType: 'reel',
+    headline: post.headline,
+    caption: post.caption,
+    videoFile: video.fileName,
+    videoPublicUrl: video.publicUrl,
+    sourcePhotoFile: video.sourcePhotoFile,
+    dryRun,
+    facebook: null,
+    instagram: null,
+    errors: [],
+  };
+
+  if (!dryRun) {
+    try {
+      result.facebook = await postReelToFacebook({
+        videoUrl: video.publicUrl,
+        caption: post.caption,
+      });
+    } catch (err) {
+      result.errors.push({ platform: 'facebook', message: describeError(err) });
+    }
+
+    try {
+      result.instagram = await postReelToInstagram({
+        videoUrl: video.publicUrl,
+        caption: post.caption,
+      });
+    } catch (err) {
+      result.errors.push({ platform: 'instagram', message: describeError(err) });
+    }
+  }
+
+  try {
+    return await appendHistory(result);
+  } catch (err) {
+    console.error('[postJob] Failed to save Reel post result to history:', err.message);
+    return result;
+  }
+}
+
 function describeError(err) {
   // Meta's Graph API returns detailed errors under response.data.error
   if (err.response?.data?.error) {
@@ -235,4 +313,4 @@ function describeError(err) {
   return err.message;
 }
 
-module.exports = { runDailyPost, runGiveawayPost };
+module.exports = { runDailyPost, runGiveawayPost, runReelPost };
