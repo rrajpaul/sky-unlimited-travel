@@ -45,7 +45,8 @@ router.post('/preview', async (req, res) => {
 // Manually trigger a real post right now (in addition to the daily schedule).
 router.post('/post-now', async (req, res) => {
   try {
-    const result = await runDailyPost({ dryRun: false });
+    const { postType } = req.query;
+    const result = await runDailyPost({ dryRun: false, postType });
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
