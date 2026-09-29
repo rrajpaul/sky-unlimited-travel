@@ -149,4 +149,25 @@ router.post('/reel-post-now', async (req, res) => {
   }
 });
 
+// Debug-only: retries JUST the Facebook Reel publish step against an
+// already-generated video's public URL — e.g. one from a previous
+// /reel-post-now attempt where Instagram already succeeded but Facebook
+// failed. Lets you retest the Facebook side in isolation without
+// generating new content or creating a second Instagram post for the same
+// attempt. Body: { videoUrl, caption }.
+router.post('/debug-facebook-reel', async (req, res) => {
+  const { videoUrl, caption } = req.body || {};
+  if (!videoUrl || !caption) {
+    return res.status(400).json({ error: 'Body must include videoUrl and caption.' });
+  }
+  try {
+    const { postReelToFacebook } = require('../services/facebookService');
+    const result = await postReelToFacebook({ videoUrl, caption });
+    res.json({ facebook: result });
+  } catch (err) {
+    const message = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+    res.status(500).json({ error: message });
+  }
+});
+
 module.exports = router;

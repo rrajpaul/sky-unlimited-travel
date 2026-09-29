@@ -306,10 +306,36 @@ async function runReelPost({ dryRun = false } = {}) {
 }
 
 function describeError(err) {
-  // Meta's Graph API returns detailed errors under response.data.error
+  // Standard Graph API error shape: { error: { message, type, code } }
   if (err.response?.data?.error) {
     return err.response.data.error.message || JSON.stringify(err.response.data.error);
   }
+
+  // rupload.facebook.com (video upload) uses a DIFFERENT error shape:
+  // { debug_info: { message: "<a JSON STRING itself, e.g. '{\"success\":
+  // false,\"error\":{\"message\":\"...\"}}'>" } } — the outer message field
+  // is itself serialized JSON, not a plain string, so it needs a second
+  // parse to get to the actual human-readable reason.
+  const debugMessage = err.response?.data?.debug_info?.message;
+  if (debugMessage) {
+    try {
+      const parsed = JSON.parse(debugMessage);
+      const innerMessage = parsed?.error?.message;
+      if (innerMessage) return innerMessage;
+    } catch {
+      // Not JSON after all — fall through and just use it as-is.
+    }
+    return debugMessage;
+  }
+
+  // Last resort: dump whatever the response body actually was, so a
+  // genuinely new/unknown error shape from Meta still surfaces something
+  // useful in history/logs instead of just axios's generic
+  // "Request failed with status code NNN".
+  if (err.response?.data) {
+    return JSON.stringify(err.response.data);
+  }
+
   return err.message;
 }
 
