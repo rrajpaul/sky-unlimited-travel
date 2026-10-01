@@ -2,6 +2,7 @@ const path = require('path');
 const express = require('express');
 const { config } = require('./config');
 const apiRoutes = require('./routes/api');
+const flyerRoutes = require('./routes/flyer');
 const { startScheduler } = require('./scheduler');
 
 const app = express();
@@ -14,6 +15,10 @@ app.use('/previews', express.static(path.join(__dirname, '..', 'public', 'previe
 
 app.use('/api', apiRoutes);
 
+// Manual flyer-upload page — its own HTTP Basic Auth, separate from the
+// rest of this app's (unauthenticated) API. See routes/flyer.js.
+app.use('/flyer', flyerRoutes);
+
 app.get('/', (req, res) => {
   res.json({
     service: 'Sky Unlimited Travel — Social Media Manager',
@@ -24,6 +29,7 @@ app.get('/', (req, res) => {
       reelPreview: 'POST /api/reel-preview (generate a Reel video, do not post)',
       reelPostNow: 'POST /api/reel-post-now (generate + publish a Reel immediately)',
       history: 'GET /api/history?limit=30',
+      flyerUpload: 'GET /flyer (web form to manually upload + post a flyer — password protected)',
     },
   });
 });

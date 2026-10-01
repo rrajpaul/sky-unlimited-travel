@@ -55,6 +55,18 @@ const config = {
   // nothing otherwise, so leaving this on year-round is safe.
   giveawayPostCron: process.env.GIVEAWAY_POST_CRON || '0 15 * * *',
 
+  // --- Manual flyer upload page (/flyer) ---
+  // Simple HTTP Basic Auth credentials gating the manual flyer-upload page
+  // — that page posts directly to the real Facebook/Instagram accounts the
+  // moment someone submits the form, so it's protected even though the
+  // rest of this app's API has no auth of its own (those routes all need
+  // curl/a terminal to use; a web form is the kind that gets bookmarked or
+  // forwarded by accident). No fallback default on purpose — if these
+  // aren't set, the /flyer page refuses to serve rather than silently
+  // running unprotected.
+  flyerUploadUser: process.env.FLYER_UPLOAD_USER,
+  flyerUploadPassword: process.env.FLYER_UPLOAD_PASSWORD,
+
   brand: {
     name: process.env.BRAND_NAME || 'Sky Unlimited Travel',
     tagline:

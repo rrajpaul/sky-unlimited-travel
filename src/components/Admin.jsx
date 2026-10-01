@@ -57,10 +57,6 @@ const AdminPage = () => {
     checkAuth();
   }, []);
 
-  // Once /api/inquiry routes require auth, an expired or invalid token
-  // comes back as a 401. Without this the admin would just see an empty
-  // table (or a generic "failed" alert) and have no idea they need to log
-  // in again — so clear the dead token and drop back to the login screen.
   const handleSessionExpired = () => {
     localStorage.removeItem('adminToken');
     setIsLoggedIn(false);
@@ -113,10 +109,8 @@ const AdminPage = () => {
 
       if (res.ok && data.success && data.token) {
 
-        // store token
         localStorage.setItem('adminToken', data.token);
 
-        // verify token with backend
         const verifyRes = await fetch(apiUrl('/api/admin/verify'), {
           headers: {
             Authorization: `Bearer ${data.token}`,
@@ -281,7 +275,7 @@ const AdminPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Mobile: Admin + Logout on one row, Open Main Site + Giveaway Entries on the next */}
+        {/* Mobile: Admin + Logout on one row, Open Main Site + Giveaway Entries + Post a Flyer on the next */}
         <div className="sm:hidden mb-6 space-y-3">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-900">Admin</h1>
@@ -307,10 +301,18 @@ const AdminPage = () => {
             >
               Giveaway Entries
             </a>
+            <a
+              href="https://resilient-warmth-production.up.railway.app/flyer"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 text-sm font-medium rounded-md text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors duration-200"
+            >
+              Post a Flyer
+            </a>
           </div>
         </div>
 
-        {/* Desktop: single row, unchanged */}
+        {/* Desktop: single row, unchanged except for the new link */}
         <div className="hidden sm:flex sm:justify-between sm:items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Admin</h1>
           <div className="flex items-center gap-3">
@@ -328,6 +330,15 @@ const AdminPage = () => {
               className="px-4 py-2 text-sm font-medium rounded-md text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors duration-200"
             >
               Giveaway Entries
+            </a>
+
+            <a
+              href="https://resilient-warmth-production.up.railway.app/flyer"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 text-sm font-medium rounded-md text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors duration-200"
+            >
+              Post a Flyer
             </a>
 
             <button
@@ -371,7 +382,6 @@ const AdminPage = () => {
             <p className="mt-1 text-sm text-gray-500">Tap a row to expand details, send payment links, and manage status</p>
           </div>
 
-          {/* Mobile card layout */}
           <div className="block sm:hidden divide-y divide-gray-200">
             {filteredRegistrations.map((reg) => (
               <div key={reg.id} className="p-4">
@@ -470,7 +480,6 @@ const AdminPage = () => {
             ))}
           </div>
 
-          {/* Desktop table layout */}
           <div className="hidden sm:block overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
