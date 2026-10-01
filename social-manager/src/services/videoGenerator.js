@@ -5,6 +5,7 @@ const { promisify } = require('util');
 const sharp = require('sharp');
 const { v4: uuidv4 } = require('uuid');
 const { config } = require('../config');
+const { pickRandomMusic } = require('./musicLibrary');
 
 const execFileAsync = promisify(execFile);
 
@@ -13,6 +14,13 @@ const WIDTH = 1080;
 const HEIGHT = 1920;
 const DURATION_SECONDS = 6; // within Meta's allowed 3–90s range for both platforms
 const FPS = 30;
+
+// When picking where in a music track to start the clip, skip the first
+// and last 10% — tracks often open/close with silence, a fade, or a
+// sparse intro, and landing the random offset there risks a near-silent
+// 6 seconds instead of something audibly "there's music playing".
+const MUSIC_START_RANGE = [0.10, 0.90];
+const MUSIC_FADE_SECONDS = 0.5;
 
 function escapeXml(text) {
   return String(text)
@@ -99,15 +107,66 @@ async function renderTextOverlayPng({ headline }) {
 }
 
 /**
+ * Returns the duration (in seconds) of a media file via ffprobe, or null
+ * if it can't be determined (e.g. a corrupt file) — callers should treat
+ * null as "don't trust this track, fall back to silent" rather than
+ * crashing the whole Reel over one bad music file.
+ */
+async function getMediaDuration(filePath) {
+  try {
+    const { stdout } = await execFileAsync('ffprobe', [
+      '-v', 'error',
+      '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      filePath,
+    ]);
+    const seconds = parseFloat(stdout.trim());
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Picks a random background track and a random start offset within it
+ * (avoiding the first/last 10%, see MUSIC_START_RANGE), long enough to
+ * cover DURATION_SECONDS. Returns null if there's no usable music — either
+ * the library is empty, or the one track picked turns out to be too short
+ * or unreadable; callers fall back to silent audio in that case rather
+ * than failing the whole Reel over a music problem.
+ */
+async function pickMusicClip() {
+  const trackPath = await pickRandomMusic();
+  if (!trackPath) return null;
+
+  const duration = await getMediaDuration(trackPath);
+  if (!duration || duration < DURATION_SECONDS + 2) {
+    // Too short to safely take a 6s clip with room for the start-offset
+    // range below — just skip music for this Reel rather than risk
+    // ffmpeg reading past the end of the file.
+    return null;
+  }
+
+  const [rangeStart, rangeEnd] = MUSIC_START_RANGE;
+  const latestStart = duration * rangeEnd - DURATION_SECONDS;
+  const earliestStart = duration * rangeStart;
+  const startOffset = earliestStart + Math.random() * Math.max(0, latestStart - earliestStart);
+
+  return { trackPath, startOffset };
+}
+
+/**
  * Renders a short (default 6s) vertical Reel from ONE real photo: a slow
  * Ken Burns zoom on the still image, with the headline + brand name
- * overlaid (matching the look of the static photo cards), and a silent
- * audio track muxed in.
- *
- * Silent audio (rather than no audio track at all) is deliberate: some
- * platforms handle a video with zero audio streams inconsistently during
- * processing, so an explicit silent AAC track is the safer choice even
- * though the music decision for now is "none".
+ * overlaid (matching the look of the static photo cards), and a music
+ * track muxed in — a random 6-second clip (with a short fade in/out) from
+ * a randomly chosen track in assets/music/, or silent audio if no music is
+ * available (an empty folder, or the one track picked turning out to be
+ * too short/unreadable), so this always produces a valid file either way.
+ * Silent audio (rather than no audio track at all) is deliberate even in
+ * the no-music case: some platforms handle a video with zero audio
+ * streams inconsistently during processing, so an explicit silent AAC
+ * track is the safer fallback.
  *
  * Returns the same { filePath, publicUrl, fileName } shape the image
  * generators use, so postJob.js can treat a Reel's output the same way
@@ -139,13 +198,18 @@ async function generateReelVideo({ headline, photoPath }) {
 
   const totalFrames = DURATION_SECONDS * FPS;
 
-  // 3. Build the video with FFmpeg:
+  // 3. Pick a music clip (see pickMusicClip) — null falls back to silence.
+  const musicClip = await pickMusicClip();
+
+  // 4. Build the video with FFmpeg:
   //    - Input 0: the oversized still photo, animated with zoompan (a slow
   //      continuous zoom-in — the classic "Ken Burns" effect) down to the
   //      real output size.
   //    - Input 1: the text overlay PNG, composited on top for the whole
   //      duration.
-  //    - Input 2: a silent audio track for the same duration (see above).
+  //    - Input 2: either a trimmed/faded clip from a real music track, or
+  //      a silent audio track, decided once up front (see musicClip) so
+  //      the rest of this function doesn't need two separate code paths.
   //    Encoded as H.264 + AAC, which matches both Facebook's and
   //    Instagram's documented Reels requirements.
   const filterComplex =
@@ -153,17 +217,28 @@ async function generateReelVideo({ headline, photoPath }) {
     `zoompan=z='min(zoom+0.0008,1.15)':d=${totalFrames}:s=${WIDTH}x${HEIGHT}:fps=${FPS}[bg];` +
     `[bg][1:v]overlay=0:0:format=auto[outv]`;
 
+  const audioInputArgs = musicClip
+    ? ['-ss', String(musicClip.startOffset), '-t', String(DURATION_SECONDS), '-i', musicClip.trackPath]
+    : ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000'];
+
+  const audioFilter = musicClip
+    ? [
+        '-af',
+        `afade=t=in:st=0:d=${MUSIC_FADE_SECONDS},afade=t=out:st=${DURATION_SECONDS - MUSIC_FADE_SECONDS}:d=${MUSIC_FADE_SECONDS}`,
+      ]
+    : [];
+
   const args = [
     '-y', // overwrite output without prompting
     '-loop', '1',
     '-i', sourceForZoom,
     '-loop', '1',
     '-i', overlayPath,
-    '-f', 'lavfi',
-    '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000',
+    ...audioInputArgs,
     '-filter_complex', filterComplex,
     '-map', '[outv]',
     '-map', '2:a',
+    ...audioFilter,
     '-t', String(DURATION_SECONDS),
     '-r', String(FPS),
     '-c:v', 'libx264',
