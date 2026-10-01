@@ -55,6 +55,56 @@ const upload = multer({
 
 const ALLOWED_MIMETYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
+// Instagram's documented safe aspect-ratio range for feed photos — Facebook
+// is generally more lenient, but Instagram is the stricter of the two, so
+// matching its range keeps a single flyer working cleanly on both. Ratio is
+// width/height: 0.8 = 4:5 (portrait limit), 1.91 = landscape limit.
+const MIN_ASPECT_RATIO = 4 / 5;
+const MAX_ASPECT_RATIO = 1.91;
+
+/**
+ * Center-crops an image buffer to bring it within [MIN_ASPECT_RATIO,
+ * MAX_ASPECT_RATIO] if it's currently outside that range — cropping only
+ * the minimum needed to reach the nearest edge of the safe range (not
+ * forcing a specific ratio like 1:1), so a flyer that's only slightly too
+ * tall/wide loses as little as possible. Returns both the (possibly
+ * unchanged) buffer and a `cropped` flag + description, so the caller can
+ * tell the uploader what happened rather than silently altering their
+ * image.
+ */
+async function cropToSafeAspectRatio(buffer) {
+  const { width, height } = await sharp(buffer).metadata();
+  const ratio = width / height;
+
+  if (ratio >= MIN_ASPECT_RATIO && ratio <= MAX_ASPECT_RATIO) {
+    return { buffer, cropped: false };
+  }
+
+  let targetWidth = width;
+  let targetHeight = height;
+
+  if (ratio < MIN_ASPECT_RATIO) {
+    // Too tall/narrow — crop height down to the portrait limit.
+    targetHeight = Math.round(width / MIN_ASPECT_RATIO);
+  } else {
+    // Too wide — crop width down to the landscape limit.
+    targetWidth = Math.round(height * MAX_ASPECT_RATIO);
+  }
+
+  const left = Math.round((width - targetWidth) / 2);
+  const top = Math.round((height - targetHeight) / 2);
+
+  const croppedBuffer = await sharp(buffer)
+    .extract({ left, top, width: targetWidth, height: targetHeight })
+    .toBuffer();
+
+  return {
+    buffer: croppedBuffer,
+    cropped: true,
+    description: `Cropped from ${width}×${height} to ${targetWidth}×${targetHeight} to fit Instagram's recommended range (between 4:5 portrait and 1.91:1 landscape).`,
+  };
+}
+
 // --- The upload form page -----------------------------------------------
 router.get('/', (req, res) => {
   res.send(`<!DOCTYPE html>
@@ -74,6 +124,8 @@ router.get('/', (req, res) => {
   #status { margin-top: 16px; padding: 12px; border-radius: 6px; font-size: 14px; white-space: pre-wrap; display: none; }
   #status.success { display: block; background: #dcfce7; color: #166534; }
   #status.error { display: block; background: #fee2e2; color: #991b1b; }
+  #status.warning { display: block; background: #fef3c7; color: #92400e; }
+  #dimensionHint { margin-top: 8px; font-size: 13px; color: #92400e; display: none; }
   #preview { margin-top: 16px; max-width: 100%; border-radius: 6px; display: none; }
 </style>
 </head>
@@ -84,6 +136,7 @@ router.get('/', (req, res) => {
   <form id="flyerForm">
     <label for="image">Flyer image</label>
     <input type="file" id="image" name="image" accept="image/jpeg,image/png,image/webp" required>
+    <div id="dimensionHint"></div>
     <img id="preview" alt="">
 
     <label for="caption">Caption</label>
@@ -101,12 +154,32 @@ router.get('/', (req, res) => {
     const imageInput = document.getElementById('image');
     const preview = document.getElementById('preview');
 
+    const dimensionHint = document.getElementById('dimensionHint');
+    const MIN_RATIO = 4 / 5;
+    const MAX_RATIO = 1.91;
+
     imageInput.addEventListener('change', () => {
       const file = imageInput.files[0];
-      if (file) {
-        preview.src = URL.createObjectURL(file);
-        preview.style.display = 'block';
-      }
+      if (!file) return;
+
+      const url = URL.createObjectURL(file);
+      preview.src = url;
+      preview.style.display = 'block';
+
+      // Instant client-side check, purely informational — the server does
+      // the actual crop regardless, this just lets Tasha know ahead of the
+      // upload round-trip rather than finding out only after submitting.
+      const img = new Image();
+      img.onload = () => {
+        const ratio = img.naturalWidth / img.naturalHeight;
+        if (ratio < MIN_RATIO || ratio > MAX_RATIO) {
+          dimensionHint.textContent = "⚠ This image (" + img.naturalWidth + "×" + img.naturalHeight + ") is outside Instagram's recommended range and will be automatically center-cropped when you post.";
+          dimensionHint.style.display = 'block';
+        } else {
+          dimensionHint.style.display = 'none';
+        }
+      };
+      img.src = url;
     });
 
     form.addEventListener('submit', async (e) => {
@@ -130,17 +203,19 @@ router.get('/', (req, res) => {
         const igOk = data.instagram && !data.errors.some(e => e.platform === 'instagram');
 
         let message = '';
+        if (data.cropWarning) message += '✂ ' + data.cropWarning + '\\n\\n';
         if (fbOk) message += '✓ Posted to Facebook\\n';
         else message += '✗ Facebook failed: ' + (data.errors.find(e => e.platform === 'facebook')?.message || 'unknown error') + '\\n';
         if (igOk) message += '✓ Posted to Instagram';
         else message += '✗ Instagram failed: ' + (data.errors.find(e => e.platform === 'instagram')?.message || 'unknown error');
 
         statusEl.textContent = message;
-        statusEl.className = (fbOk && igOk) ? 'success' : 'error';
+        statusEl.className = (fbOk && igOk) ? (data.cropWarning ? 'warning' : 'success') : 'error';
 
         if (fbOk && igOk) {
           form.reset();
           preview.style.display = 'none';
+          dimensionHint.style.display = 'none';
         }
       } catch (err) {
         statusEl.textContent = 'Failed: ' + err.message;
@@ -172,8 +247,14 @@ router.post('/post', upload.single('image'), async (req, res) => {
     return res.status(400).json({ error: 'Caption is required.' });
   }
 
-  let imageFile, imagePublicUrl;
+  let imageFile, imagePublicUrl, cropWarning = null;
   try {
+    // Crop first (if needed) at full original resolution, THEN re-encode —
+    // cropping after the resize-to-2048 step would mean working from an
+    // already-downscaled image for no reason.
+    const { buffer: workingBuffer, cropped, description } = await cropToSafeAspectRatio(file.buffer);
+    if (cropped) cropWarning = description;
+
     // Re-encode through sharp regardless of input format — guarantees a
     // clean, standard JPEG reaches Meta's fetchers rather than whatever
     // the uploader's phone/camera/design tool happened to produce, and
@@ -184,7 +265,7 @@ router.post('/post', upload.single('image'), async (req, res) => {
     await fs.mkdir(dir, { recursive: true });
     const filePath = path.join(dir, fileName);
 
-    await sharp(file.buffer)
+    await sharp(workingBuffer)
       .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 90 })
       .toFile(filePath);
@@ -208,6 +289,7 @@ router.post('/post', upload.single('image'), async (req, res) => {
     caption,
     imageFile,
     imagePublicUrl,
+    cropWarning, // null if no crop was needed
     dryRun: false,
     facebook: null,
     instagram: null,
