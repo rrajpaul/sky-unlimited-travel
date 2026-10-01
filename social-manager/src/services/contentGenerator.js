@@ -1,7 +1,57 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { config, assertConfigured } = require('../config');
+const { readHistory } = require('./historyStore');
 
 const POST_TYPES = ['travel_quote', 'travel_tip', 'destination_spotlight', 'illustration', 'checklist'];
+
+// How many recent real headlines to show the model as "already used,
+// don't repeat this topic". Across all post types, not just the one being
+// generated right now — a tip that already appeared as a checklist title
+// recently is still worth steering away from. 15 covers roughly the last
+// week or so at the current posting cadence (2 regular posts + 1 Reel/day).
+const RECENT_HEADLINES_FOR_DEDUP = 15;
+
+/**
+ * Returns the most recent REAL (non-dry-run) post headlines, newest first
+ * — meant to be shown to the model as topics to avoid repeating. This is
+ * the actual fix for a problem sampling temperature can't solve: asked an
+ * open-ended prompt repeatedly with no memory between calls, the model
+ * tends toward whatever's most common in its training data for that kind
+ * of request (e.g. "book flights on Tuesday" for a generic travel tip) —
+ * wording varies per call, but the underlying topic doesn't, since nothing
+ * ever told it that topic was already used.
+ *
+ * Fails open (returns an empty array) rather than throwing if history is
+ * unreachable — a history outage should degrade this feature quietly, not
+ * block posting entirely.
+ */
+async function getRecentHeadlines(limit = RECENT_HEADLINES_FOR_DEDUP) {
+  try {
+    const history = await readHistory();
+    return history
+      .filter((entry) => !entry.dryRun && entry.headline)
+      .slice(0, limit)
+      .map((entry) => entry.headline);
+  } catch (err) {
+    console.error(
+      '[contentGenerator] Failed to fetch recent headlines for repeat-avoidance (continuing without it):',
+      err.message
+    );
+    return [];
+  }
+}
+
+/**
+ * Formats a list of recent headlines as a prompt section telling the model
+ * not to repeat those topics. Returns an empty string if there's nothing
+ * to avoid yet (e.g. the very first post ever), so prompts don't carry a
+ * weird empty "avoid repeating:" section with nothing under it.
+ */
+function buildAvoidRepeatsSection(recentHeadlines) {
+  if (!recentHeadlines || recentHeadlines.length === 0) return '';
+  const list = recentHeadlines.map((h) => `- "${h}"`).join('\n');
+  return `\n\nThese topics/headlines were used in recent posts — write about something\ngenuinely different, not a reworded version of any of these:\n${list}`;
+}
 
 /**
  * Picks a post type for a given day + slot. Rotates through types based on
@@ -17,8 +67,9 @@ function pickPostType(date = new Date(), slot = 1) {
   return POST_TYPES[(dayOfYear + (slot - 1)) % POST_TYPES.length];
 }
 
-function buildPrompt(postType) {
+function buildPrompt(postType, recentHeadlines) {
   const { name, tagline } = config.brand;
+  const avoidSection = buildAvoidRepeatsSection(recentHeadlines);
 
   const shared = `You are writing a single social media post for ${name}, a travel
 agency (${tagline}). The post will be shared on Facebook and Instagram.
@@ -87,19 +138,20 @@ beach trip, etc.) and write genuinely useful, specific items — not vague
 platitudes.`,
   };
 
-  return byType[postType];
+  return byType[postType] + avoidSection;
 }
 
 async function generatePost({ postType, slot = 1 } = {}) {
   assertConfigured(['anthropicApiKey']);
   const type = postType || pickPostType(new Date(), slot);
+  const recentHeadlines = await getRecentHeadlines();
 
   const client = new Anthropic({ apiKey: config.anthropicApiKey });
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 500,
-    messages: [{ role: 'user', content: buildPrompt(type) }],
+    messages: [{ role: 'user', content: buildPrompt(type, recentHeadlines) }],
   });
 
   const raw = response.content
@@ -213,6 +265,8 @@ exact shape:
 async function generateReelPost() {
   assertConfigured(['anthropicApiKey']);
   const { name, tagline } = config.brand;
+  const recentHeadlines = await getRecentHeadlines();
+  const avoidSection = buildAvoidRepeatsSection(recentHeadlines);
 
   const prompt = `You are writing the on-screen text and caption for a short
 (6 second) Instagram/Facebook Reel for ${name}, a travel agency (${tagline}).
@@ -227,7 +281,7 @@ exact shape:
 
 Write about the FEELING of travel/escape in general — do not name a
 specific real city, landmark, or country, since the photo behind this text
-is chosen independently and may not match a specific place you mention.`;
+is chosen independently and may not match a specific place you mention.${avoidSection}`;
 
   const client = new Anthropic({ apiKey: config.anthropicApiKey });
   const response = await client.messages.create({
