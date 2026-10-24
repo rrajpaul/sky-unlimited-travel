@@ -1,4 +1,5 @@
 const path = require('path');
+const crypto = require('crypto');
 const express = require('express');
 const { runDailyPost, runGiveawayPost, runReelPost } = require('../services/postJob');
 const { readHistory } = require('../services/historyStore');
@@ -6,6 +7,51 @@ const { listPhotos } = require('../services/photoLibrary');
 const { getActiveGiveaway } = require('../services/giveawayService');
 
 const router = express.Router();
+
+// Public on purpose: lets Railway (or you) confirm the server is up without
+// a key. Reveals nothing but the current time.
+router.get('/health', (req, res) => {
+  res.json({ ok: true, time: new Date().toISOString() });
+});
+
+// ---------------------------------------------------------------------------
+// API key protection — every route below this point requires the key.
+// ---------------------------------------------------------------------------
+//
+// Set ADMIN_API_KEY in Railway → your service → Variables. Send it as the
+// "x-api-key" header. For GET routes only (history, photos, etc.) it can
+// also be passed as ?key=... so they can be opened in a browser.
+//
+// Fails CLOSED: if ADMIN_API_KEY isn't set, these routes refuse every
+// request rather than silently becoming public again. The scheduled 11am /
+// 7pm posts are unaffected either way, since the scheduler calls postJob
+// directly rather than going through these URLs.
+
+function keysMatch(provided, expected) {
+  // Hash both first so the comparison is constant-time regardless of
+  // length, so the key can't be guessed character by character from
+  // response timing.
+  const a = crypto.createHash('sha256').update(String(provided)).digest();
+  const b = crypto.createHash('sha256').update(String(expected)).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
+function requireApiKey(req, res, next) {
+  const expected = process.env.ADMIN_API_KEY;
+  if (!expected) {
+    console.error('[routes] ADMIN_API_KEY is not set; refusing protected request to', req.path);
+    return res.status(503).json({ error: 'Server is missing ADMIN_API_KEY configuration.' });
+  }
+
+  const provided = req.get('x-api-key') || (req.method === 'GET' ? req.query.key : undefined);
+  if (!provided || !keysMatch(provided, expected)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  next();
+}
+
+router.use(requireApiKey);
 
 // How many photos are currently loaded in assets/photos, and their
 // filenames — useful for confirming an upload actually landed in the right
@@ -22,16 +68,11 @@ router.get('/photos', async (req, res) => {
   }
 });
 
-router.get('/health', (req, res) => {
-  res.json({ ok: true, time: new Date().toISOString() });
-});
-
 // Generates content + image WITHOUT posting to Facebook/Instagram — lets you
 // see what today's post would look like before it goes out automatically.
 // An optional ?postType=... query param (travel_quote, travel_tip,
 // destination_spotlight, illustration, or checklist) overrides the normal
-// day-based rotation, purely for testing — so you can preview every post
-// type today instead of waiting for each one to come up naturally.
+// day-based rotation, purely for testing.
 router.post('/preview', async (req, res) => {
   try {
     const { postType } = req.query;
@@ -61,9 +102,8 @@ router.get('/history', async (req, res) => {
 
 // Summarizes which of the real photos (see sourcePhotoFile on each history
 // entry) have actually appeared in a real post, and how many times each —
-// built from history, not a separate tracking system, so it always matches
-// what genuinely got posted. dryRun previews are excluded, since they don't
-// represent a real post going out.
+// built from history, so it always matches what genuinely got posted.
+// dryRun previews are excluded.
 router.get('/photo-usage', async (req, res) => {
   try {
     const [allPhotos, history] = await Promise.all([listPhotos(), readHistory()]);
@@ -89,9 +129,7 @@ router.get('/photo-usage', async (req, res) => {
 });
 
 // Checks whether a giveaway is currently active, without generating
-// content or posting anything — useful for confirming the connection to
-// the main site's giveaway API works, and for seeing what data it's
-// currently returning.
+// content or posting anything.
 router.get('/giveaway-status', async (req, res) => {
   try {
     const giveaway = await getActiveGiveaway();
@@ -101,10 +139,8 @@ router.get('/giveaway-status', async (req, res) => {
   }
 });
 
-// Generates a giveaway post's content + image WITHOUT posting — same
-// dry-run pattern as /preview. If no giveaway is currently active, returns
-// { skipped: true } rather than an error, since that's the expected result
-// on any day without a live giveaway.
+// Generates a giveaway post's content + image WITHOUT posting. If no
+// giveaway is currently active, returns { skipped: true }.
 router.post('/giveaway-preview', async (req, res) => {
   try {
     const result = await runGiveawayPost({ dryRun: true });
@@ -114,8 +150,8 @@ router.post('/giveaway-preview', async (req, res) => {
   }
 });
 
-// Manually trigger a real giveaway post right now, in addition to the daily
-// schedule — only actually posts if a giveaway is currently active.
+// Manually trigger a real giveaway post right now — only actually posts if
+// a giveaway is currently active.
 router.post('/giveaway-post-now', async (req, res) => {
   try {
     const result = await runGiveawayPost({ dryRun: false });
@@ -125,10 +161,8 @@ router.post('/giveaway-post-now', async (req, res) => {
   }
 });
 
-// Generates a Reel (video + headline + caption) WITHOUT posting — same
-// dry-run pattern as /preview, but meaningfully slower (a few seconds of
-// real FFmpeg encoding), since there's no cheap way to preview a video
-// that's actually representative of what would really get posted.
+// Generates a Reel (video + headline + caption) WITHOUT posting. Slower
+// than /preview, since it does real FFmpeg encoding.
 router.post('/reel-preview', async (req, res) => {
   try {
     const result = await runReelPost({ dryRun: true });
@@ -138,9 +172,8 @@ router.post('/reel-preview', async (req, res) => {
   }
 });
 
-// Manually trigger a real Reel post right now, in addition to the daily
-// 11am schedule. This posts to BOTH Facebook and Instagram Reels for
-// real — there is no "just testing" version of this one.
+// Manually trigger a real Reel post right now. This posts to BOTH Facebook
+// and Instagram Reels for real.
 router.post('/reel-post-now', async (req, res) => {
   try {
     const result = await runReelPost({ dryRun: false });
@@ -150,33 +183,9 @@ router.post('/reel-post-now', async (req, res) => {
   }
 });
 
-// Debug-only: retries JUST the Facebook Reel publish step against an
-// already-generated video's public URL — e.g. one from a previous
-// /reel-post-now attempt where Instagram already succeeded but Facebook
-// failed. Lets you retest the Facebook side in isolation without
-// generating new content or creating a second Instagram post for the same
-// attempt. Body: { videoUrl, caption }.
-// Debug-only: retries JUST the Facebook Reel publish step against an
-// already-generated video already sitting in public/previews/ — e.g. from
-// a previous /reel-post-now attempt where Instagram already succeeded but
-// Facebook failed. Lets you retest the Facebook side in isolation without
-// generating new content or creating a second Instagram post for the same
-// attempt. Body: { videoFileName, caption } — videoFileName is just the
-// filename (e.g. "8298ed64-....mp4"), not a full URL or path.
-router.post('/debug-facebook-reel', async (req, res) => {
-  const { videoFileName, caption } = req.body || {};
-  if (!videoFileName || !caption) {
-    return res.status(400).json({ error: 'Body must include videoFileName and caption.' });
-  }
-  try {
-    const { postReelToFacebook } = require('../services/facebookService');
-    const videoFilePath = path.join(__dirname, '..', '..', 'public', 'previews', videoFileName);
-    const result = await postReelToFacebook({ videoFilePath, caption });
-    res.json({ facebook: result });
-  } catch (err) {
-    const message = err.response?.data ? JSON.stringify(err.response.data) : err.message;
-    res.status(500).json({ error: message });
-  }
-});
+// (The /debug-facebook-reel route was removed: it posted any caption sent
+// to it and didn't validate the filename. If Facebook Reels ever need
+// isolated testing again, call postReelToFacebook from a local script
+// instead of exposing it on the server.)
 
 module.exports = router;

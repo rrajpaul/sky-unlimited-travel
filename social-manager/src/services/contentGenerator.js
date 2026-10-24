@@ -4,61 +4,85 @@ const { readHistory } = require('./historyStore');
 
 const POST_TYPES = ['travel_quote', 'travel_tip', 'destination_spotlight', 'illustration', 'checklist'];
 
-// How many recent real headlines to show the model as "already used,
-// don't repeat this topic". Across all post types, not just the one being
-// generated right now — a tip that already appeared as a checklist title
-// recently is still worth steering away from. 15 covers roughly the last
-// week or so at the current posting cadence (2 regular posts + 1 Reel/day).
-const RECENT_HEADLINES_FOR_DEDUP = 15;
+// How many recent real posts to show the model as "already used, don't
+// repeat this topic". Across all post types, not just the one being
+// generated — a tip that already appeared as a checklist title is still
+// worth steering away from.
+//
+// Was 15 (~7 days at 2 posts/day), which is why "Book Flights on Tuesday
+// Afternoons" still repeated every 10 days: each travel_tip comes up every
+// 5 days, so the previous tip on that topic had already fallen out of the
+// window. 60 covers about a month, so several earlier posts of every type
+// are always visible.
+const RECENT_POSTS_FOR_DEDUP = 60;
+
+// How many recent caption openings to show, so captions stop starting the
+// same way ("There's a version of you…", "There's magic in…").
+const RECENT_OPENERS_FOR_DEDUP = 20;
+const OPENER_WORD_COUNT = 6;
 
 /**
- * Returns the most recent REAL (non-dry-run) post headlines, newest first
- * — meant to be shown to the model as topics to avoid repeating. This is
- * the actual fix for a problem sampling temperature can't solve: asked an
- * open-ended prompt repeatedly with no memory between calls, the model
- * tends toward whatever's most common in its training data for that kind
- * of request (e.g. "book flights on Tuesday" for a generic travel tip) —
- * wording varies per call, but the underlying topic doesn't, since nothing
- * ever told it that topic was already used.
+ * Returns the most recent REAL (non-dry-run) posts, newest first, as
+ * { headline, caption } — shown to the model as topics and openings to
+ * avoid repeating. Asked the same open-ended prompt with no memory between
+ * calls, the model drifts toward whatever's most common for that kind of
+ * request, so it needs to be told what's already been used.
  *
  * Fails open (returns an empty array) rather than throwing if history is
  * unreachable — a history outage should degrade this feature quietly, not
  * block posting entirely.
  */
-async function getRecentHeadlines(limit = RECENT_HEADLINES_FOR_DEDUP) {
+async function getRecentPosts(limit = RECENT_POSTS_FOR_DEDUP) {
   try {
     const history = await readHistory();
     return history
       .filter((entry) => !entry.dryRun && entry.headline)
       .slice(0, limit)
-      .map((entry) => entry.headline);
+      .map((entry) => ({ headline: entry.headline, caption: entry.caption || '' }));
   } catch (err) {
     console.error(
-      '[contentGenerator] Failed to fetch recent headlines for repeat-avoidance (continuing without it):',
+      '[contentGenerator] Failed to fetch recent posts for repeat-avoidance (continuing without it):',
       err.message
     );
     return [];
   }
 }
 
+/** First few words of a caption, e.g. "There's a version of you that…". */
+function captionOpener(caption) {
+  const words = caption.trim().split(/\s+/).slice(0, OPENER_WORD_COUNT);
+  return words.length ? `${words.join(' ')}…` : '';
+}
+
 /**
- * Formats a list of recent headlines as a prompt section telling the model
- * not to repeat those topics. Returns an empty string if there's nothing
- * to avoid yet (e.g. the very first post ever), so prompts don't carry a
- * weird empty "avoid repeating:" section with nothing under it.
+ * Formats recent posts as a prompt section telling the model not to repeat
+ * those topics or caption openings. Returns an empty string if there's
+ * nothing to avoid yet (e.g. the very first post ever).
  */
-function buildAvoidRepeatsSection(recentHeadlines) {
-  if (!recentHeadlines || recentHeadlines.length === 0) return '';
-  const list = recentHeadlines.map((h) => `- "${h}"`).join('\n');
-  return `\n\nThese topics/headlines were used in recent posts — write about something\ngenuinely different, not a reworded version of any of these:\n${list}`;
+function buildAvoidRepeatsSection(recentPosts) {
+  if (!recentPosts || recentPosts.length === 0) return '';
+
+  const headlines = recentPosts.map((p) => `- "${p.headline}"`).join('\n');
+
+  const openers = [
+    ...new Set(
+      recentPosts
+        .slice(0, RECENT_OPENERS_FOR_DEDUP)
+        .map((p) => captionOpener(p.caption))
+        .filter(Boolean)
+    ),
+  ];
+  const openerSection = openers.length
+    ? `\n\nRecent captions opened like this — start yours a different way, with a\ndifferent sentence structure, not just different words:\n${openers.map((o) => `- "${o}"`).join('\n')}`
+    : '';
+
+  return `\n\nThese topics/headlines were used in recent posts — write about something\ngenuinely different, not a reworded version of any of these. Covering the\nsame idea with new wording still counts as a repeat:\n${headlines}${openerSection}`;
 }
 
 /**
  * Picks a post type for a given day + slot. Rotates through types based on
  * the day of year, offset by slot so multiple posts on the same day get
- * different types instead of all repeating the same style — e.g. slot 1
- * might land on "checklist" while slot 2 lands on "travel_tip", rather than
- * both being "checklist" just because they ran on the same date.
+ * different types.
  */
 function pickPostType(date = new Date(), slot = 1) {
   const dayOfYear = Math.floor(
@@ -67,9 +91,16 @@ function pickPostType(date = new Date(), slot = 1) {
   return POST_TYPES[(dayOfYear + (slot - 1)) % POST_TYPES.length];
 }
 
-function buildPrompt(postType, recentHeadlines) {
+// Advice that's outdated or widely debunked, and that the model tends to
+// reach for by default. Posting it hurts a travel agency's credibility.
+const AVOID_MYTHS = `Avoid outdated or debunked travel "hacks", such as booking flights on a
+particular weekday (e.g. Tuesday) for lower fares, or clearing cookies /
+using incognito mode to get cheaper prices. Only give advice a professional
+travel agent would stand behind today.`;
+
+function buildPrompt(postType, recentPosts) {
   const { name, tagline } = config.brand;
-  const avoidSection = buildAvoidRepeatsSection(recentHeadlines);
+  const avoidSection = buildAvoidRepeatsSection(recentPosts);
 
   const shared = `You are writing a single social media post for ${name}, a travel
 agency (${tagline}). The post will be shared on Facebook and Instagram.
@@ -94,8 +125,13 @@ person's real quote — write your own). Do not attribute it to anyone.`,
   "image_theme": "one of: beach, mountains, city-skyline, airplane, tropical, roadtrip"
 }
 
-Make the headline a short, genuinely useful travel tip (packing, booking,
-airports, or destinations). The caption should expand on the tip briefly.`,
+Make the headline a short, genuinely useful travel tip. Vary the area it
+covers — for example packing, airports and security, travel documents,
+health and insurance, money and currency, getting around at the
+destination, hotels and resorts, cruises, travelling with kids, or
+planning ahead. The caption should expand on the tip briefly.
+
+${AVOID_MYTHS}`,
 
     destination_spotlight: `${shared} Use this exact shape:
 {
@@ -133,25 +169,30 @@ short mood or call-to-action line that fits a minimal graphic.`,
 }
 
 Pick ONE clear, specific topic for the checklist (packing for a cruise,
-booking flights on a budget, first-time passport tips, what to pack for a
-beach trip, etc.) and write genuinely useful, specific items — not vague
-platitudes.`,
+first-time passport tips, what to pack for a beach trip, travelling with
+kids, etc.) and write genuinely useful, specific items — not vague
+platitudes.
+
+If the headline includes a number, write it as digits and make sure it
+exactly matches the number of items in the list.
+
+${AVOID_MYTHS}`,
   };
 
   return byType[postType] + avoidSection;
 }
 
-async function generatePost({ postType, slot = 1 } = {}) {
-  assertConfigured(['anthropicApiKey']);
-  const type = postType || pickPostType(new Date(), slot);
-  const recentHeadlines = await getRecentHeadlines();
-
+/**
+ * Sends one prompt to Claude and parses the JSON reply. Shared by all the
+ * generators below so the parsing and validation behave identically.
+ */
+async function askForJson({ prompt, maxTokens, label }) {
   const client = new Anthropic({ apiKey: config.anthropicApiKey });
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-5',
-    max_tokens: 500,
-    messages: [{ role: 'user', content: buildPrompt(type, recentHeadlines) }],
+    max_tokens: maxTokens,
+    messages: [{ role: 'user', content: prompt }],
   });
 
   const raw = response.content
@@ -166,15 +207,48 @@ async function generatePost({ postType, slot = 1 } = {}) {
   try {
     parsed = JSON.parse(cleaned);
   } catch (err) {
-    throw new Error(`Failed to parse AI content as JSON: ${err.message}\nRaw: ${raw}`);
+    throw new Error(`Failed to parse AI ${label} as JSON: ${err.message}\nRaw: ${raw}`);
   }
 
   if (!parsed.headline || !parsed.caption) {
-    throw new Error(`AI content missing required fields. Got: ${JSON.stringify(parsed)}`);
+    throw new Error(`AI ${label} missing required fields. Got: ${JSON.stringify(parsed)}`);
   }
 
-  if (type === 'checklist' && (!Array.isArray(parsed.items) || parsed.items.length === 0)) {
-    throw new Error(`Checklist post missing "items" array. Got: ${JSON.stringify(parsed)}`);
+  return parsed;
+}
+
+/**
+ * Safety net for checklist headlines: if the headline's number doesn't
+ * match the item count (e.g. "6 Must-Haves" with 5 items, as on Oct 5),
+ * rewrite the number to match rather than post something visibly wrong.
+ */
+function fixChecklistCount(headline, itemCount) {
+  const match = headline.match(/\b(\d+)\b/);
+  if (!match) return headline;
+  const stated = Number(match[1]);
+  if (stated === itemCount || stated < 2 || stated > 20) return headline;
+  console.warn(
+    `[contentGenerator] Checklist headline said ${stated} but has ${itemCount} items; correcting.`
+  );
+  return headline.replace(match[0], String(itemCount));
+}
+
+async function generatePost({ postType, slot = 1 } = {}) {
+  assertConfigured(['anthropicApiKey']);
+  const type = postType || pickPostType(new Date(), slot);
+  const recentPosts = await getRecentPosts();
+
+  const parsed = await askForJson({
+    prompt: buildPrompt(type, recentPosts),
+    maxTokens: 500,
+    label: 'content',
+  });
+
+  if (type === 'checklist') {
+    if (!Array.isArray(parsed.items) || parsed.items.length === 0) {
+      throw new Error(`Checklist post missing "items" array. Got: ${JSON.stringify(parsed)}`);
+    }
+    parsed.headline = fixChecklistCount(parsed.headline, parsed.items.length);
   }
 
   return { postType: type, ...parsed };
@@ -182,11 +256,9 @@ async function generatePost({ postType, slot = 1 } = {}) {
 
 /**
  * Generates a giveaway promo post from REAL giveaway data (prize amount,
- * destination, entry URL) — unlike the five regular post types, nothing
- * here is invented by the model. The prize amount, destination, and URL are
- * embedded as given facts in the prompt and the model is told explicitly
- * not to alter them, since getting these wrong in a real promotion is a
- * much bigger problem than a slightly awkward caption.
+ * destination, entry URL) — nothing here is invented by the model. The
+ * prize amount, destination, and URL are embedded as given facts in the
+ * prompt and the model is told explicitly not to alter them.
  */
 async function generateGiveawayPost({ giveaway, pageUrl }) {
   assertConfigured(['anthropicApiKey']);
@@ -217,31 +289,7 @@ exact shape:
   "image_theme": "one of: beach, mountains, city-skyline, airplane, tropical, roadtrip — pick whichever best matches the destination"
 }`;
 
-  const client = new Anthropic({ apiKey: config.anthropicApiKey });
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 500,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  const raw = response.content
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('\n')
-    .trim();
-
-  const cleaned = raw.replace(/^```json\s*|```$/g, '').trim();
-
-  let parsed;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch (err) {
-    throw new Error(`Failed to parse AI giveaway content as JSON: ${err.message}\nRaw: ${raw}`);
-  }
-
-  if (!parsed.headline || !parsed.caption) {
-    throw new Error(`AI giveaway content missing required fields. Got: ${JSON.stringify(parsed)}`);
-  }
+  const parsed = await askForJson({ prompt, maxTokens: 500, label: 'giveaway content' });
 
   return {
     postType: 'giveaway',
@@ -253,20 +301,16 @@ exact shape:
 }
 
 /**
- * Generates the headline + caption for a Reel. Deliberately the same
- * "generic enough to work under any photo" style as travel_quote/
- * travel_tip (see pickPostType) rather than naming a specific place —
- * the Reel's photo is picked by the same plain rotation used for the
- * other photo-based post types, so the copy must never depend on which
- * specific photo ends up behind it. Kept short: this sits over a 6-second
- * vertical video, not a feed image, so a shorter headline reads better on
- * screen for that little time.
+ * Generates the headline + caption for a Reel. Same "generic enough to
+ * work under any photo" style as the other photo-based post types, since
+ * the Reel's photo is picked by plain rotation. Kept short: this sits over
+ * a 6-second vertical video, so a shorter headline reads better on screen.
  */
 async function generateReelPost() {
   assertConfigured(['anthropicApiKey']);
   const { name, tagline } = config.brand;
-  const recentHeadlines = await getRecentHeadlines();
-  const avoidSection = buildAvoidRepeatsSection(recentHeadlines);
+  const recentPosts = await getRecentPosts();
+  const avoidSection = buildAvoidRepeatsSection(recentPosts);
 
   const prompt = `You are writing the on-screen text and caption for a short
 (6 second) Instagram/Facebook Reel for ${name}, a travel agency (${tagline}).
@@ -283,31 +327,7 @@ Write about the FEELING of travel/escape in general — do not name a
 specific real city, landmark, or country, since the photo behind this text
 is chosen independently and may not match a specific place you mention.${avoidSection}`;
 
-  const client = new Anthropic({ apiKey: config.anthropicApiKey });
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 400,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  const raw = response.content
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('\n')
-    .trim();
-
-  const cleaned = raw.replace(/^```json\s*|```$/g, '').trim();
-
-  let parsed;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch (err) {
-    throw new Error(`Failed to parse AI Reel content as JSON: ${err.message}\nRaw: ${raw}`);
-  }
-
-  if (!parsed.headline || !parsed.caption) {
-    throw new Error(`AI Reel content missing required fields. Got: ${JSON.stringify(parsed)}`);
-  }
+  const parsed = await askForJson({ prompt, maxTokens: 400, label: 'Reel content' });
 
   return { postType: 'reel', ...parsed };
 }
