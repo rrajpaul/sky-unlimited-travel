@@ -11,7 +11,7 @@ const { pickNextPhoto, listPhotos } = require('./photoLibrary');
 const { getActiveGiveaway } = require('./giveawayService');
 const { postToFacebook, postReelToFacebook } = require('./facebookService');
 const { postToInstagram, postReelToInstagram } = require('./instagramService');
-const { appendHistory } = require('./historyStore');
+const { appendHistory, readHistory } = require('./historyStore');
 const { config } = require('../config');
 
 // Chance (0-1) of using a real photo as the background for a quote/tip/
@@ -21,6 +21,124 @@ const { config } = require('../config');
 // photos are used whenever the library has one, since the whole point of
 // loading 186 real photos was to feature them prominently.
 const PHOTO_CARD_PROBABILITY = 1;
+
+// ---------------------------------------------------------------------------
+// Retry on transient network failures
+// ---------------------------------------------------------------------------
+//
+// Only retries when the request never got an answer from Meta at all
+// (connection reset, network unreachable, DNS hiccup, timeout) — e.g. the
+// Oct 6 Instagram failure: "connect ECONNRESET ...; connect ENETUNREACH ...".
+// If Meta DID respond with an error (bad token, invalid media, rate limit),
+// that's a real rejection: retrying won't fix it and could risk a duplicate
+// post, so those are recorded in `errors` immediately, same as before.
+//
+// Small caveat: a connection reset that happens AFTER Meta received the
+// request (rather than while connecting) could, rarely, mean the first
+// attempt actually went through. That's an acceptable trade for not
+// silently skipping a whole day on a platform.
+const RETRYABLE_NETWORK_CODES = new Set([
+  'ECONNRESET',
+  'ENETUNREACH',
+  'ETIMEDOUT',
+  'ECONNREFUSED',
+  'EAI_AGAIN',
+  'ENOTFOUND',
+  'EPIPE',
+  'ECONNABORTED',
+]);
+const RETRY_DELAYS_MS = [15_000, 45_000]; // up to 3 attempts total
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientNetworkError(err) {
+  if (err.response) return false; // Meta answered — a real rejection.
+  // Node may wrap several connection attempts (IPv4 + IPv6) in an
+  // AggregateError, so check the inner errors' codes too.
+  const codes = [err.code, ...(err.errors || []).map((e) => e && e.code)];
+  if (codes.some((c) => RETRYABLE_NETWORK_CODES.has(c))) return true;
+  return /ECONNRESET|ENETUNREACH|ETIMEDOUT|EAI_AGAIN|socket hang up/i.test(err.message || '');
+}
+
+async function withRetry(platform, fn) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= RETRY_DELAYS_MS.length || !isTransientNetworkError(err)) throw err;
+      const delay = RETRY_DELAYS_MS[attempt];
+      console.warn(
+        `[postJob] ${platform} network error (${err.message}); retrying in ${delay / 1000}s ` +
+          `(attempt ${attempt + 2} of ${RETRY_DELAYS_MS.length + 1})`
+      );
+      await sleep(delay);
+    }
+  }
+}
+
+/**
+ * Publishes to one platform with retry, recording either the result or the
+ * error on `result`. One platform failing never stops the other.
+ */
+async function publish(result, platform, fn) {
+  try {
+    result[platform] = await withRetry(platform, fn);
+  } catch (err) {
+    result.errors.push({ platform, message: describeError(err) });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Avoid repeating recent headlines
+// ---------------------------------------------------------------------------
+//
+// History showed the same headline going out several times (e.g. "Book
+// Flights on Tuesday Afternoons for Better Deals" on Oct 2, 12 and 22).
+// Before posting, compare the new headline against roughly the last month
+// of real posts and regenerate if it's an exact repeat (ignoring case and
+// punctuation). If every attempt still repeats, post anyway rather than
+// skip the day.
+//
+// The recent headlines are also passed to the generators as
+// `avoidHeadlines`. They're ignored until contentGenerator.js adds them to
+// the prompt, but once it does, Claude can avoid near-duplicates too, not
+// just exact ones.
+const RECENT_HEADLINE_WINDOW = 60; // ~30 days at 2 posts/day
+const MAX_HEADLINE_ATTEMPTS = 3;
+
+function normalizeHeadline(headline) {
+  return (headline || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+async function getRecentHeadlines() {
+  try {
+    const history = await readHistory();
+    return history
+      .filter((entry) => !entry.dryRun && entry.headline)
+      .slice(0, RECENT_HEADLINE_WINDOW)
+      .map((entry) => entry.headline);
+  } catch (err) {
+    // Never let a history read failure block the day's post.
+    console.warn('[postJob] Could not read history for duplicate check:', err.message);
+    return [];
+  }
+}
+
+async function generateFreshPost(generate, recentHeadlines) {
+  const seen = new Set(recentHeadlines.map(normalizeHeadline));
+  let post;
+  for (let attempt = 1; attempt <= MAX_HEADLINE_ATTEMPTS; attempt++) {
+    post = await generate();
+    if (!seen.has(normalizeHeadline(post.headline))) return post;
+    console.warn(
+      `[postJob] Headline "${post.headline}" was used recently ` +
+        `(attempt ${attempt} of ${MAX_HEADLINE_ATTEMPTS}); regenerating.`
+    );
+  }
+  return post;
+}
 
 /**
  * Picks and runs the right image renderer for a generated post. Keeps this
@@ -45,18 +163,10 @@ async function renderPostImage(post, { dryRun } = {}) {
   }
 
   // travel_quote / travel_tip / destination_spotlight: use a real photo as
-  // the background when the library has one and the dice roll says so,
-  // otherwise fall back to the original gradient card. Photos are picked in
-  // alphabetical order, one after another (not randomly), so the whole
-  // library gets used evenly over time rather than some photos repeating
-  // while others never come up. These post types are deliberately written
-  // (see contentGenerator.js) to never require a specific matching photo —
-  // any travel photo works under a generic quote/tip, and
-  // destination_spotlight avoids naming an exact real place — so plain
-  // rotation never risks a caption/photo mismatch. The coin flip happens
-  // BEFORE advancing the cursor, so a photo is only marked "used" when it's
-  // actually going to be rendered — not on every call regardless of
-  // outcome.
+  // the background when the library has one, otherwise fall back to the
+  // gradient card. Photos are picked in order (not randomly) so the whole
+  // library gets used evenly. The coin flip happens BEFORE advancing the
+  // cursor, so a photo is only marked "used" when it's actually rendered.
   const photos = await listPhotos();
   const usePhoto = photos.length > 0 && Math.random() < PHOTO_CARD_PROBABILITY;
 
@@ -70,19 +180,22 @@ async function renderPostImage(post, { dryRun } = {}) {
 
 /**
  * Runs the full daily pipeline:
- *   1. Ask Claude for post content (quote / tip / spotlight / illustration
- *      / checklist — see contentGenerator for what each type returns).
- *   2. Render that into a branded square image — a gradient quote card, a
- *      real photo with a text overlay, a simple flat illustration, or a
- *      checklist/infographic card, depending on the post type.
- *   3. Publish the image + caption to Facebook and Instagram.
+ *   1. Ask Claude for post content, regenerating if the headline repeats a
+ *      recent post.
+ *   2. Render that into a branded square image.
+ *   3. Publish the image + caption to Facebook and Instagram, retrying
+ *      transient network failures.
  *   4. Log the outcome (including partial failures) to history.
  *
  * `dryRun: true` generates content + image but skips actually posting —
  * useful for the /preview endpoint.
  */
 async function runDailyPost({ dryRun = false, slot = 1, postType } = {}) {
-  const post = await generatePost({ slot, postType });
+  const recentHeadlines = await getRecentHeadlines();
+  const post = await generateFreshPost(
+    () => generatePost({ slot, postType, avoidHeadlines: recentHeadlines }),
+    recentHeadlines
+  );
   const image = await renderPostImage(post, { dryRun });
 
   if (!image.publicUrl && !dryRun) {
@@ -99,9 +212,8 @@ async function runDailyPost({ dryRun = false, slot = 1, postType } = {}) {
     imageTheme: post.image_theme,
     imageFile: image.fileName,
     imagePublicUrl: image.publicUrl,
-    // Which of the real 186 photos was actually used as this post's
-    // background — null for illustration/checklist/gradient posts, which
-    // never draw from the photo library at all.
+    // Which real photo was used as this post's background — null for
+    // illustration/checklist/gradient posts.
     sourcePhotoFile: image.sourcePhotoFile || null,
     dryRun,
     facebook: null,
@@ -110,29 +222,16 @@ async function runDailyPost({ dryRun = false, slot = 1, postType } = {}) {
   };
 
   if (!dryRun) {
-    try {
-      result.facebook = await postToFacebook({
-        imageUrl: image.publicUrl,
-        caption: post.caption,
-      });
-    } catch (err) {
-      result.errors.push({ platform: 'facebook', message: describeError(err) });
-    }
-
-    try {
-      result.instagram = await postToInstagram({
-        imageUrl: image.publicUrl,
-        caption: post.caption,
-      });
-    } catch (err) {
-      result.errors.push({ platform: 'instagram', message: describeError(err) });
-    }
+    await publish(result, 'facebook', () =>
+      postToFacebook({ imageUrl: image.publicUrl, caption: post.caption })
+    );
+    await publish(result, 'instagram', () =>
+      postToInstagram({ imageUrl: image.publicUrl, caption: post.caption })
+    );
   }
 
   // A DB failure here must not erase or hide a post that may have already
-  // gone out successfully above — better to return the real result (just
-  // unsaved to history) and log the storage failure separately, than to
-  // throw and have the caller think the whole post failed.
+  // gone out successfully above.
   try {
     return await appendHistory(result);
   } catch (err) {
@@ -142,17 +241,12 @@ async function runDailyPost({ dryRun = false, slot = 1, postType } = {}) {
 }
 
 /**
- * Third, independent daily post: only actually posts anything when a
- * giveaway is currently active on the main website (see
- * giveawayService.js). When there isn't one, this is a deliberate no-op —
- * it returns a `{ skipped: true }` result and does NOT write to history,
- * so history stays a record of actual posts (and real failures) rather
- * than being cluttered with "nothing to do today" entries for every day a
- * giveaway isn't running.
+ * Third, independent daily post: only posts when a giveaway is currently
+ * active on the main website. When there isn't one, returns
+ * `{ skipped: true }` and does NOT write to history.
  *
  * `dryRun: true` still generates real content + image from whatever
- * giveaway IS currently active (for testing), but never posts — same
- * meaning as in runDailyPost.
+ * giveaway IS currently active, but never posts.
  */
 async function runGiveawayPost({ dryRun = false } = {}) {
   const giveaway = await getActiveGiveaway();
@@ -201,23 +295,12 @@ async function runGiveawayPost({ dryRun = false } = {}) {
   };
 
   if (!dryRun) {
-    try {
-      result.facebook = await postToFacebook({
-        imageUrl: image.publicUrl,
-        caption: post.caption,
-      });
-    } catch (err) {
-      result.errors.push({ platform: 'facebook', message: describeError(err) });
-    }
-
-    try {
-      result.instagram = await postToInstagram({
-        imageUrl: image.publicUrl,
-        caption: post.caption,
-      });
-    } catch (err) {
-      result.errors.push({ platform: 'instagram', message: describeError(err) });
-    }
+    await publish(result, 'facebook', () =>
+      postToFacebook({ imageUrl: image.publicUrl, caption: post.caption })
+    );
+    await publish(result, 'instagram', () =>
+      postToInstagram({ imageUrl: image.publicUrl, caption: post.caption })
+    );
   }
 
   try {
@@ -229,27 +312,21 @@ async function runGiveawayPost({ dryRun = false } = {}) {
 }
 
 /**
- * Posts a Reel (short vertical video) instead of the usual static image —
- * this is what the 11am slot runs every day now, replacing runDailyPost
- * for that slot specifically (see scheduler.js). Always uses a real photo
- * (never the illustration/checklist/gradient fallbacks the image post
- * types have), picked the same theme-agnostic way as those, and shares the
- * exact same duplicate-prevention logic in photoLibrary.js — a Reel and a
- * photo post are both "used the photo" as far as that check is concerned.
+ * Posts a Reel (short vertical video) — what the 11am slot runs every day
+ * (see scheduler.js). Always uses a real photo, and shares the same
+ * photo rotation as the image posts.
  *
- * Posts to BOTH Facebook and Instagram Reels independently, same
- * partial-failure handling as runDailyPost: one platform failing doesn't
- * stop the other, and both get recorded in `errors`.
+ * Posts to BOTH Facebook and Instagram Reels independently: one platform
+ * failing doesn't stop the other, and both get recorded in `errors`.
  *
- * `dryRun: true` still fully renders the actual video (so you can watch
- * exactly what would be posted) but skips publishing to either platform —
- * more expensive than an image dry-run (a few seconds of FFmpeg encoding
- * plus, once deployed, a still-real photo pick), but there's no cheaper
- * way to preview a video that's actually representative of what would go
- * out.
+ * `dryRun: true` still fully renders the video but skips publishing.
  */
 async function runReelPost({ dryRun = false } = {}) {
-  const post = await generateReelPost();
+  const recentHeadlines = await getRecentHeadlines();
+  const post = await generateFreshPost(
+    () => generateReelPost({ avoidHeadlines: recentHeadlines }),
+    recentHeadlines
+  );
 
   const photoPath = await pickNextPhoto();
   if (!photoPath) {
@@ -278,23 +355,12 @@ async function runReelPost({ dryRun = false } = {}) {
   };
 
   if (!dryRun) {
-    try {
-      result.facebook = await postReelToFacebook({
-        videoFilePath: video.filePath,
-        caption: post.caption,
-      });
-    } catch (err) {
-      result.errors.push({ platform: 'facebook', message: describeError(err) });
-    }
-
-    try {
-      result.instagram = await postReelToInstagram({
-        videoUrl: video.publicUrl,
-        caption: post.caption,
-      });
-    } catch (err) {
-      result.errors.push({ platform: 'instagram', message: describeError(err) });
-    }
+    await publish(result, 'facebook', () =>
+      postReelToFacebook({ videoFilePath: video.filePath, caption: post.caption })
+    );
+    await publish(result, 'instagram', () =>
+      postReelToInstagram({ videoUrl: video.publicUrl, caption: post.caption })
+    );
   }
 
   try {
@@ -312,10 +378,8 @@ function describeError(err) {
   }
 
   // rupload.facebook.com (video upload) uses a DIFFERENT error shape:
-  // { debug_info: { message: "<a JSON STRING itself, e.g. '{\"success\":
-  // false,\"error\":{\"message\":\"...\"}}'>" } } — the outer message field
-  // is itself serialized JSON, not a plain string, so it needs a second
-  // parse to get to the actual human-readable reason.
+  // { debug_info: { message: "<a JSON string itself>" } }, so it needs a
+  // second parse to get to the actual human-readable reason.
   const debugMessage = err.response?.data?.debug_info?.message;
   if (debugMessage) {
     try {
@@ -328,10 +392,7 @@ function describeError(err) {
     return debugMessage;
   }
 
-  // Last resort: dump whatever the response body actually was, so a
-  // genuinely new/unknown error shape from Meta still surfaces something
-  // useful in history/logs instead of just axios's generic
-  // "Request failed with status code NNN".
+  // Last resort: dump whatever the response body actually was.
   if (err.response?.data) {
     return JSON.stringify(err.response.data);
   }
