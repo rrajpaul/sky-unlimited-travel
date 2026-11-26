@@ -63,6 +63,21 @@ const MIN_ASPECT_RATIO = 4 / 5;
 const MAX_ASPECT_RATIO = 1.91;
 
 /**
+ * Phone cameras usually save photos sideways and record the real
+ * orientation in EXIF instead. sharp drops that EXIF tag when it re-encodes,
+ * so without applying the rotation first, a portrait phone photo would be
+ * posted sideways (and the aspect-ratio check below would measure the
+ * wrong way round). Rotated losslessly into PNG so the final JPEG encode
+ * is still the only lossy step; images with no rotation are passed through
+ * untouched.
+ */
+async function applyExifOrientation(buffer) {
+  const { orientation } = await sharp(buffer).metadata();
+  if (!orientation || orientation === 1) return buffer;
+  return sharp(buffer).rotate().png().toBuffer();
+}
+
+/**
  * Center-crops an image buffer to bring it within [MIN_ASPECT_RATIO,
  * MAX_ASPECT_RATIO] if it's currently outside that range — cropping only
  * the minimum needed to reach the nearest edge of the safe range (not
@@ -74,6 +89,7 @@ const MAX_ASPECT_RATIO = 1.91;
  */
 async function cropToSafeAspectRatio(buffer) {
   const { width, height } = await sharp(buffer).metadata();
+  if (!width || !height) throw new Error('Could not read the image dimensions.');
   const ratio = width / height;
 
   if (ratio >= MIN_ASPECT_RATIO && ratio <= MAX_ASPECT_RATIO) {
@@ -252,7 +268,8 @@ router.post('/post', upload.single('image'), async (req, res) => {
     // Crop first (if needed) at full original resolution, THEN re-encode —
     // cropping after the resize-to-2048 step would mean working from an
     // already-downscaled image for no reason.
-    const { buffer: workingBuffer, cropped, description } = await cropToSafeAspectRatio(file.buffer);
+    const oriented = await applyExifOrientation(file.buffer);
+    const { buffer: workingBuffer, cropped, description } = await cropToSafeAspectRatio(oriented);
     if (cropped) cropWarning = description;
 
     // Re-encode through sharp regardless of input format — guarantees a

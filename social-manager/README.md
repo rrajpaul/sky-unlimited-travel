@@ -121,10 +121,17 @@ back to posting once per day.
   you'd rather have a human approve each post first, the scheduler can be
   changed to call `/api/preview`-style generation and queue it for approval
   instead of publishing directly — happy to add that if you want it.
-- **Duplicate/rate-limit protection**: this doesn't currently check whether
-  today's post already ran (e.g. after a server restart). For production,
-  consider adding a check against `history.json` for "already posted today"
-  before the cron job proceeds.
+- **Duplicate protection**: each scheduled slot (the Reel, the second
+  image post, and the giveaway post) runs at most once per calendar day in
+  `TIMEZONE`. Before posting, a run claims today's date for its slot in the
+  `social_scheduled_runs` table; a second trigger the same day (redeploy
+  overlap, two replicas, a restart) sees the claim and skips. If a run fails
+  before anything is published, the claim is released so a later run can
+  still post. Manual `/api/post-now` calls are not limited.
+- **Network retries**: calls to Meta have timeouts and are retried per step.
+  Steps that make a post public (`/photos`, `media_publish`, Reel `finish`)
+  are only retried if the request never reached Meta, so a dropped
+  connection can't publish the same post twice.
 - **Image style**: images are a solid-gradient quote/tip card rather than
   real destination photography. If you want real photos behind the text
   (e.g. via a stock photo API), that's a straightforward addition to

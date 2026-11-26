@@ -95,9 +95,16 @@ router.post('/post-now', async (req, res) => {
 });
 
 router.get('/history', async (req, res) => {
-  const limit = Math.min(Number(req.query.limit) || 30, 500);
-  const history = await readHistory();
-  res.json(history.slice(0, limit));
+  // Without this try/catch a database error here is an unhandled promise
+  // rejection, which crashes the whole process on Node 15+ (Express 4
+  // doesn't catch errors from async handlers).
+  try {
+    const limit = Math.min(Number(req.query.limit) || 30, 500);
+    const history = await readHistory();
+    res.json(history.slice(0, limit));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Summarizes which of the real photos (see sourcePhotoFile on each history
