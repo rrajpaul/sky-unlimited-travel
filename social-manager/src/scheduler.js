@@ -1,6 +1,33 @@
 const cron = require('node-cron');
 const { config } = require('./config');
 const { runDailyPost, runGiveawayPost, runReelPost } = require('./services/postJob');
+const { claimSlot, releaseSlot } = require('./services/runGuard');
+
+/**
+ * Runs one scheduled job at most once per day per slot (see runGuard.js).
+ * Returns the job's result, or null if the slot already ran today.
+ *
+ * The claim is given back whenever nothing actually got published — the
+ * job threw before posting, a giveaway run was skipped, or both platforms
+ * rejected the post — so a later run that day can still try.
+ */
+async function runOncePerDay(slotKey, label, job) {
+  if (!(await claimSlot(slotKey))) {
+    console.log(`[scheduler] ${label} already ran today; skipping this trigger.`);
+    return null;
+  }
+  let result;
+  try {
+    result = await job();
+  } catch (err) {
+    await releaseSlot(slotKey);
+    throw err;
+  }
+  if (result.skipped || (!result.facebook && !result.instagram)) {
+    await releaseSlot(slotKey);
+  }
+  return result;
+}
 
 /**
  * Schedules one recurring post job at the given cron expression. `slot`
@@ -22,7 +49,10 @@ function scheduleOne(cronExpression, label, slot) {
     async () => {
       console.log(`[scheduler] Running ${label}...`);
       try {
-        const result = await runDailyPost({ dryRun: false, slot });
+        const result = await runOncePerDay(`image-slot-${slot}`, label, () =>
+          runDailyPost({ dryRun: false, slot })
+        );
+        if (!result) return;
         console.log(`[scheduler] ${label} complete:`, {
           headline: result.headline,
           errors: result.errors,
@@ -58,7 +88,10 @@ function scheduleReel(cronExpression, label) {
     async () => {
       console.log(`[scheduler] Running ${label} (Reel)...`);
       try {
-        const result = await runReelPost({ dryRun: false });
+        const result = await runOncePerDay('reel', `${label} (Reel)`, () =>
+          runReelPost({ dryRun: false })
+        );
+        if (!result) return;
         console.log(`[scheduler] ${label} (Reel) complete:`, {
           headline: result.headline,
           errors: result.errors,
@@ -91,7 +124,10 @@ function scheduleGiveaway(cronExpression) {
     async () => {
       console.log('[scheduler] Running Giveaway post check...');
       try {
-        const result = await runGiveawayPost({ dryRun: false });
+        const result = await runOncePerDay('giveaway', 'Giveaway post', () =>
+          runGiveawayPost({ dryRun: false })
+        );
+        if (!result) return;
         if (result.skipped) {
           console.log('[scheduler] Giveaway post skipped — no active giveaway.');
         } else {

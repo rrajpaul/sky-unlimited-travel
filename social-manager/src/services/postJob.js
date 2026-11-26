@@ -22,69 +22,17 @@ const { config } = require('../config');
 // loading 186 real photos was to feature them prominently.
 const PHOTO_CARD_PROBABILITY = 1;
 
-// ---------------------------------------------------------------------------
-// Retry on transient network failures
-// ---------------------------------------------------------------------------
-//
-// Only retries when the request never got an answer from Meta at all
-// (connection reset, network unreachable, DNS hiccup, timeout) — e.g. the
-// Oct 6 Instagram failure: "connect ECONNRESET ...; connect ENETUNREACH ...".
-// If Meta DID respond with an error (bad token, invalid media, rate limit),
-// that's a real rejection: retrying won't fix it and could risk a duplicate
-// post, so those are recorded in `errors` immediately, same as before.
-//
-// Small caveat: a connection reset that happens AFTER Meta received the
-// request (rather than while connecting) could, rarely, mean the first
-// attempt actually went through. That's an acceptable trade for not
-// silently skipping a whole day on a platform.
-const RETRYABLE_NETWORK_CODES = new Set([
-  'ECONNRESET',
-  'ENETUNREACH',
-  'ETIMEDOUT',
-  'ECONNREFUSED',
-  'EAI_AGAIN',
-  'ENOTFOUND',
-  'EPIPE',
-  'ECONNABORTED',
-]);
-const RETRY_DELAYS_MS = [15_000, 45_000]; // up to 3 attempts total
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isTransientNetworkError(err) {
-  if (err.response) return false; // Meta answered — a real rejection.
-  // Node may wrap several connection attempts (IPv4 + IPv6) in an
-  // AggregateError, so check the inner errors' codes too.
-  const codes = [err.code, ...(err.errors || []).map((e) => e && e.code)];
-  if (codes.some((c) => RETRYABLE_NETWORK_CODES.has(c))) return true;
-  return /ECONNRESET|ENETUNREACH|ETIMEDOUT|EAI_AGAIN|socket hang up/i.test(err.message || '');
-}
-
-async function withRetry(platform, fn) {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      if (attempt >= RETRY_DELAYS_MS.length || !isTransientNetworkError(err)) throw err;
-      const delay = RETRY_DELAYS_MS[attempt];
-      console.warn(
-        `[postJob] ${platform} network error (${err.message}); retrying in ${delay / 1000}s ` +
-          `(attempt ${attempt + 2} of ${RETRY_DELAYS_MS.length + 1})`
-      );
-      await sleep(delay);
-    }
-  }
-}
+// Network retries now happen per step inside facebookService.js /
+// instagramService.js (see metaHttp.js), so a dropped connection on the
+// final publish call can't cause a second, duplicate post.
 
 /**
- * Publishes to one platform with retry, recording either the result or the
- * error on `result`. One platform failing never stops the other.
+ * Publishes to one platform, recording either the result or the error on
+ * `result`. One platform failing never stops the other.
  */
 async function publish(result, platform, fn) {
   try {
-    result[platform] = await withRetry(platform, fn);
+    result[platform] = await fn();
   } catch (err) {
     result.errors.push({ platform, message: describeError(err) });
   }
@@ -101,10 +49,8 @@ async function publish(result, platform, fn) {
 // punctuation). If every attempt still repeats, post anyway rather than
 // skip the day.
 //
-// The recent headlines are also passed to the generators as
-// `avoidHeadlines`. They're ignored until contentGenerator.js adds them to
-// the prompt, but once it does, Claude can avoid near-duplicates too, not
-// just exact ones.
+// (contentGenerator.js separately shows recent headlines to the model so
+// it avoids near-duplicates too; this check is the exact-repeat backstop.)
 const RECENT_HEADLINE_WINDOW = 60; // ~30 days at 2 posts/day
 const MAX_HEADLINE_ATTEMPTS = 3;
 
@@ -193,7 +139,7 @@ async function renderPostImage(post, { dryRun } = {}) {
 async function runDailyPost({ dryRun = false, slot = 1, postType } = {}) {
   const recentHeadlines = await getRecentHeadlines();
   const post = await generateFreshPost(
-    () => generatePost({ slot, postType, avoidHeadlines: recentHeadlines }),
+    () => generatePost({ slot, postType }),
     recentHeadlines
   );
   const image = await renderPostImage(post, { dryRun });
@@ -324,11 +270,13 @@ async function runGiveawayPost({ dryRun = false } = {}) {
 async function runReelPost({ dryRun = false } = {}) {
   const recentHeadlines = await getRecentHeadlines();
   const post = await generateFreshPost(
-    () => generateReelPost({ avoidHeadlines: recentHeadlines }),
+    () => generateReelPost(),
     recentHeadlines
   );
 
-  const photoPath = await pickNextPhoto();
+  // Like renderPostImage: a preview must not advance the photo rotation,
+  // or every /api/reel-preview would skip a photo that never got posted.
+  const photoPath = dryRun ? (await listPhotos())[0] || null : await pickNextPhoto();
   if (!photoPath) {
     throw new Error('No photos available in the library to build a Reel from.');
   }

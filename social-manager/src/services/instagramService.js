@@ -1,4 +1,4 @@
-const axios = require('axios');
+const { graph, step } = require('./metaHttp');
 const { config, assertConfigured } = require('../config');
 
 const BASE = () => `https://graph.facebook.com/${config.graphApiVersion}`;
@@ -22,12 +22,17 @@ function sleep(ms) {
  */
 async function waitForContainerReady(containerId) {
   for (let attempt = 0; attempt < STATUS_POLL_MAX_ATTEMPTS; attempt++) {
-    const { data } = await axios.get(`${BASE()}/${containerId}`, {
-      params: {
-        fields: 'status_code',
-        access_token: config.fbPageAccessToken,
-      },
-    });
+    const { data } = await step(
+      'Instagram status check',
+      () =>
+        graph.get(`${BASE()}/${containerId}`, {
+          params: {
+            fields: 'status_code',
+            access_token: config.fbPageAccessToken,
+          },
+        }),
+      { idempotent: true }
+    );
 
     if (data.status_code === 'FINISHED') return;
     if (data.status_code === 'ERROR') {
@@ -55,23 +60,36 @@ async function postToInstagram({ imageUrl, caption }) {
   assertConfigured(['igBusinessAccountId', 'fbPageAccessToken']);
 
   const createUrl = `${BASE()}/${config.igBusinessAccountId}/media`;
-  const { data: container } = await axios.post(createUrl, null, {
-    params: {
-      image_url: imageUrl,
-      caption,
-      access_token: config.fbPageAccessToken,
-    },
-  });
+  // An unpublished container is harmless (Meta expires it), so retry freely.
+  const { data: container } = await step(
+    'Instagram container create',
+    () =>
+      graph.post(createUrl, null, {
+        params: {
+          image_url: imageUrl,
+          caption,
+          access_token: config.fbPageAccessToken,
+        },
+      }),
+    { idempotent: true }
+  );
 
   await waitForContainerReady(container.id);
 
   const publishUrl = `${BASE()}/${config.igBusinessAccountId}/media_publish`;
-  const { data: published } = await axios.post(publishUrl, null, {
-    params: {
-      creation_id: container.id,
-      access_token: config.fbPageAccessToken,
-    },
-  });
+  // This is the step that makes the post public, so it's only retried if
+  // the request never reached Meta.
+  const { data: published } = await step(
+    'Instagram publish',
+    () =>
+      graph.post(publishUrl, null, {
+        params: {
+          creation_id: container.id,
+          access_token: config.fbPageAccessToken,
+        },
+      }),
+    { idempotent: false }
+  );
 
   return published; // { id }
 }
@@ -88,12 +106,17 @@ const REEL_STATUS_POLL_MAX_ATTEMPTS = 60; // up to 5 minutes total
 
 async function waitForReelContainerReady(containerId) {
   for (let attempt = 0; attempt < REEL_STATUS_POLL_MAX_ATTEMPTS; attempt++) {
-    const { data } = await axios.get(`${BASE()}/${containerId}`, {
-      params: {
-        fields: 'status_code',
-        access_token: config.fbPageAccessToken,
-      },
-    });
+    const { data } = await step(
+      'Instagram status check',
+      () =>
+        graph.get(`${BASE()}/${containerId}`, {
+          params: {
+            fields: 'status_code',
+            access_token: config.fbPageAccessToken,
+          },
+        }),
+      { idempotent: true }
+    );
 
     if (data.status_code === 'FINISHED') return;
     if (data.status_code === 'ERROR') {
@@ -118,24 +141,36 @@ async function postReelToInstagram({ videoUrl, caption }) {
   assertConfigured(['igBusinessAccountId', 'fbPageAccessToken']);
 
   const createUrl = `${BASE()}/${config.igBusinessAccountId}/media`;
-  const { data: container } = await axios.post(createUrl, null, {
-    params: {
-      media_type: 'REELS',
-      video_url: videoUrl,
-      caption,
-      access_token: config.fbPageAccessToken,
-    },
-  });
+  const { data: container } = await step(
+    'Instagram Reel container create',
+    () =>
+      graph.post(createUrl, null, {
+        params: {
+          media_type: 'REELS',
+          video_url: videoUrl,
+          caption,
+          access_token: config.fbPageAccessToken,
+        },
+      }),
+    { idempotent: true }
+  );
 
   await waitForReelContainerReady(container.id);
 
   const publishUrl = `${BASE()}/${config.igBusinessAccountId}/media_publish`;
-  const { data: published } = await axios.post(publishUrl, null, {
-    params: {
-      creation_id: container.id,
-      access_token: config.fbPageAccessToken,
-    },
-  });
+  // This is the step that makes the post public, so it's only retried if
+  // the request never reached Meta.
+  const { data: published } = await step(
+    'Instagram publish',
+    () =>
+      graph.post(publishUrl, null, {
+        params: {
+          creation_id: container.id,
+          access_token: config.fbPageAccessToken,
+        },
+      }),
+    { idempotent: false }
+  );
 
   return published; // { id }
 }
